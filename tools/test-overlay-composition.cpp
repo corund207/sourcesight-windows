@@ -67,6 +67,16 @@ int main() {
             require(nearColor(empty,background_color),"empty overlay pixels leave desktop visible");
             require(nearColor(desktopPixel(rect.left+60,rect.top+60),background_color),"ESP box interior stays transparent");
             require(nearColor(desktopPixel(rect.left+180,rect.top+60),RGB(134,81,100)),"translucent graphics blend with desktop");
+            const auto hit=WindowFromPoint(POINT{rect.left+180,rect.top+60});
+            require(hit==(passthrough?background:Window::hwnd),"mouse hit testing follows menu input mode");
+            if(passthrough) {
+                SetActiveWindow(background);
+                require(GetActiveWindow()==background,"activate underlying fixture");
+                const auto foreground=GetForegroundWindow();
+                Window::SetVisible(false);Window::SetVisible(true);
+                require(GetActiveWindow()==background && GetForegroundWindow()==foreground,
+                        "showing overlay preserves underlying keyboard focus");
+            }
         }
         Window::DestroyImGui();imgui=false;Window::DestroyDevice();Window::DespawnWindow();
         DestroyWindow(background);DeleteObject(brush);LogHelper::Destroy();

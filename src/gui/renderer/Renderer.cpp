@@ -155,6 +155,7 @@ bool Renderer::HandleState() {
 
     if (should_toggle || pressed_end) { // Toggle when pressing end to trigger the config save :v
         this->isOpen = !isOpen;
+        Window::SetClickthrough(Window::hwnd, !this->isOpen);
 
         // Release cursor when opening the menu
         // Sometimes flashes the render as its handling the window order
@@ -163,7 +164,6 @@ bool Renderer::HandleState() {
         else
             if (auto process=Engine::GetProcess()) SetForegroundWindow(process->hwnd_);
 
-        Window::SetClickthrough(Window::hwnd, !this->isOpen);
         LOGF(VERBOSE, "Toggling menu state to {}", this->isOpen.load());
 
         // Capture settings on their owning UI thread. A detached writer raced
@@ -195,14 +195,14 @@ bool Renderer::HandleWindowOrder() {
 
     if (!this->isFocused && overlay_visible) {
         LOGF(VERBOSE, "Hiding overlay window because the game is not focused");
-        ShowWindow(Window::hwnd, SW_HIDE);
+        Window::SetVisible(false);
         overlay_visible = false;
         return true;
     }
 
     if (!overlay_visible && this->isFocused) {
         LOGF(VERBOSE, "Showing overlay window as the game is focused");
-        ShowWindow(Window::hwnd, SW_SHOW);
+        Window::SetVisible(true);
         overlay_visible = true;
         return true;
     }

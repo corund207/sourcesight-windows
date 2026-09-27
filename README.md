@@ -52,6 +52,8 @@ only appear while the menu is open; no startup help panel covers the game.
 
 **Insert** opens/closes the menu. **F9** disables the overlay. **End** saves
 the active profile and exits. Closing the menu also saves the profile.
+With the menu closed, mouse input passes through to the game and the overlay
+does not take keyboard focus when it reappears after switching applications.
 Profiles are stored under `configs/` in the working directory. Writes use
 flushed temporary files and Windows atomic replacement with a `.json.bak`
 backup. Linux visual profiles can be imported; automation sections are stripped.
@@ -110,7 +112,8 @@ radar calibration, synthetic geometry/visibility, actual OpenGL framebuffer
 pixels, Windows process reads/file replacement, legacy-profile removal, and
 the app's offline preview. A desktop composition regression checks that empty
 pixels reveal a colored window underneath while overlay graphics remain visible,
-including menu clickthrough toggles. Tests do not attach to CS2. Framebuffer,
+including mouse hit testing, menu clickthrough toggles and focus preservation.
+Tests do not attach to CS2. Framebuffer,
 desktop composition and preview checks require OpenGL 3.3; hosted CI runs the
 remaining checks because hosted
 Windows machines may only provide OpenGL 1.1.

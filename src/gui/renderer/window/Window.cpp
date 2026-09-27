@@ -9,7 +9,18 @@
 #include "gui/frontend/menu/Menu.hpp"
 #include "gui/renderer/FullMapRenderer.hpp"
 #include <fstream>
-namespace { GLFWwindow* window=nullptr; bool first_frame=true; }
+namespace {
+GLFWwindow* window=nullptr;
+bool first_frame=true,clickthrough=false;
+WNDPROC original_proc=nullptr;
+LRESULT CALLBACK OverlayProc(HWND target,UINT message,WPARAM wparam,LPARAM lparam) {
+    if(clickthrough) {
+        if(message==WM_NCHITTEST)return HTTRANSPARENT;
+        if(message==WM_MOUSEACTIVATE)return MA_NOACTIVATE;
+    }
+    return CallWindowProcW(original_proc,target,message,wparam,lparam);
+}
+}
 bool Window::SpawnWindow() {
     glfwSetErrorCallback([](int code,const char* message) { LOGF(WARNING,"GLFW {}: {}",code,message); });
     if(!glfwInit())return false;
@@ -33,9 +44,12 @@ bool Window::SpawnWindow() {
                             "SourceSight Windows",nullptr,nullptr);
     if(!window) { glfwTerminate();return false; }
     hwnd=glfwGetWin32Window(window);
+    original_proc=reinterpret_cast<WNDPROC>(SetWindowLongPtrW(hwnd,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(OverlayProc)));
+    clickthrough=false;
     if(!preview) {
         auto style=GetWindowLongPtrW(hwnd,GWL_EXSTYLE);
         SetWindowLongPtrW(hwnd,GWL_EXSTYLE,style|WS_EX_TOOLWINDOW);
+        SetClickthrough(hwnd,true);
         glfwSetWindowPos(window,0,0);
     }
     glfwMakeContextCurrent(window);glfwSwapInterval(0);
@@ -43,7 +57,7 @@ bool Window::SpawnWindow() {
 }
 void Window::DespawnWindow() {
     if(window)glfwDestroyWindow(window);
-    window=nullptr;hwnd=nullptr;glfwTerminate();
+    window=nullptr;hwnd=nullptr;original_proc=nullptr;clickthrough=false;glfwTerminate();
 }
 bool Window::CreateDevice() {
     if(!window)return false;
@@ -99,7 +113,7 @@ void Window::EndRender() {
     }
     glfwSwapBuffers(window);
     // Publish a cleared/rendered framebuffer before showing the native window.
-    if(first_frame) { first_frame=false;glfwShowWindow(window); }
+    if(first_frame) { first_frame=false;SetVisible(true); }
 }
 void Window::SetBounds(const RECT& bounds) {
     if(!window)return;
@@ -111,8 +125,18 @@ void Window::SetTopMost(HWND target,bool enabled) {
     SetWindowPos(target,enabled?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,
                  SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE);
 }
-void Window::SetClickthrough(HWND,bool enabled) {
-    if(window)glfwSetWindowAttrib(window,GLFW_MOUSE_PASSTHROUGH,enabled?GLFW_TRUE:GLFW_FALSE);
+void Window::SetClickthrough(HWND target,bool enabled) {
+    if(!window || target!=hwnd)return;
+    clickthrough=enabled;
+    glfwSetWindowAttrib(window,GLFW_MOUSE_PASSTHROUGH,enabled?GLFW_TRUE:GLFW_FALSE);
+    auto style=GetWindowLongPtrW(target,GWL_EXSTYLE);
+    if(enabled)style|=WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_NOACTIVATE;
+    else style&=~(WS_EX_TRANSPARENT|WS_EX_NOACTIVATE);
+    SetWindowLongPtrW(target,GWL_EXSTYLE,style);
+    // Initialize layered-window attributes explicitly. GLFW's passthrough
+    // path can leave a newly layered window with zero attribute flags.
+    if(enabled)SetLayeredWindowAttributes(target,0,255,LWA_ALPHA);
+    if(enabled && GetCapture()==target)ReleaseCapture();
 }
 bool Window::SetAffinity(HWND target,WindowAffinity affinity) {
     const DWORD mode=affinity==WindowAffinity::Invisible?WDA_EXCLUDEFROMCAPTURE:
@@ -120,4 +144,12 @@ bool Window::SetAffinity(HWND target,WindowAffinity affinity) {
     return SetWindowDisplayAffinity(target,mode)!=0;
 }
 void Window::SetVSync(bool enabled) { vsync=enabled;glfwSwapInterval(enabled?1:0); }
-void Window::SetVisible(bool visible) { if(window) { if(visible)glfwShowWindow(window);else glfwHideWindow(window); } }
+void Window::SetVisible(bool visible) {
+    if(!window)return;
+    if(!visible)glfwHideWindow(window);
+    else if(Menu::IsPreviewMode())glfwShowWindow(window);
+    else {
+        ShowWindow(hwnd,SW_SHOWNOACTIVATE);
+        SetTopMost(hwnd);
+    }
+}
