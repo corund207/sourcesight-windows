@@ -1,0 +1,17 @@
+/.tools/
+/build*/
+/dist/
+/configs/
+/captures/
+/logs/
+/maps/*.tri
+/maps/*.vphys*
+*.log
+crashlog.txt
+config.json
+*.obj
+*.pdb
+*.exe
+*.dll
+*.zip
+/.vs/

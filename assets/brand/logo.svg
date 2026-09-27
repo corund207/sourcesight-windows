@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">SourceSight aperture mark</title>
+  <rect width="128" height="128" rx="30" fill="#1f2124"/>
+  <path d="M44 29h40l20 35-20 35H44L24 64z" fill="none" stroke="#c3e0b2" stroke-width="7" stroke-linejoin="round"/>
+  <circle cx="64" cy="64" r="12" fill="#c3e0b2"/>
+</svg>

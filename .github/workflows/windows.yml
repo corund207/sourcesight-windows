@@ -1,0 +1,27 @@
+name: Windows build
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure x64
+        run: cmake -S . -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+      - name: Offline regressions
+        run: ctest --test-dir build -C Release --output-on-failure -E "^(full-map-renderer|preview)$"
+      - name: Package
+        run: ./scripts/package-release.ps1 -BuildDir build -Configuration Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sourcesight-windows-x64
+          path: dist/sourcesight-windows-v*-x64.zip
+          if-no-files-found: error

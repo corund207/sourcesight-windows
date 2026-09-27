@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">SourceSight</title>
+  <desc id="desc">A sapphire eye and code-bracket mark for SourceSight</desc>
+  <defs>
+    <linearGradient id="sapphire" x1="32" y1="32" x2="224" y2="224" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#63b3ff"/>
+      <stop offset="1" stop-color="#2264d1"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="#0b1020"/>
+  <path d="M86 74 42 128l44 54M170 74l44 54-44 54" fill="none" stroke="url(#sapphire)" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="128" cy="128" r="31" fill="#0b1020" stroke="#8bd0ff" stroke-width="10"/>
+  <circle cx="128" cy="128" r="12" fill="#8bd0ff"/>
+</svg>

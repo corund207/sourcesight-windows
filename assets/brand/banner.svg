@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="380" viewBox="0 0 1280 380" role="img" aria-labelledby="title desc">
+  <title id="title">SourceSight — Graphite Studio</title>
+  <desc id="desc">Windows native overlay. Visual controls. A graphite workspace with sage highlights.</desc>
+  <rect width="1280" height="380" rx="28" fill="#1f2124"/>
+  <rect x="24" y="24" width="1232" height="332" rx="20" fill="none" stroke="#373c3d"/>
+  <path d="M103 125h70l35 61-35 61h-70l-35-61z" fill="none" stroke="#c3e0b2" stroke-width="9" stroke-linejoin="round"/>
+  <circle cx="138" cy="186" r="19" fill="#c3e0b2"/>
+  <g font-family="DejaVu Sans,Arial,sans-serif">
+    <text x="260" y="116" font-size="15" letter-spacing="5" fill="#c3e0b2">GRAPHITE STUDIO / 0.6</text>
+    <text x="256" y="194" font-size="66" font-weight="bold" letter-spacing="-2" fill="#e8edeb">SourceSight</text>
+    <text x="260" y="244" font-size="23" fill="#a3ada8">Windows native. Visual controls.</text>
+    <text x="260" y="295" font-size="15" fill="#8c9690">BY JONAH CHANG</text>
+  </g>
+  <g fill="#2b2e30" stroke="#454c48">
+    <rect x="946" y="94" width="228" height="54" rx="15"/>
+    <rect x="946" y="164" width="228" height="54" rx="15"/>
+    <rect x="946" y="234" width="228" height="54" rx="15"/>
+  </g>
+  <g fill="#c3e0b2"><circle cx="975" cy="121" r="7"/><circle cx="975" cy="191" r="7"/><circle cx="975" cy="261" r="7"/></g>
+  <g font-family="DejaVu Sans,Arial,sans-serif" font-size="17" fill="#e8edeb">
+    <text x="999" y="127">Visual workspace</text><text x="999" y="197">Map geometry</text><text x="999" y="267">Profile controls</text>
+  </g>
+</svg>

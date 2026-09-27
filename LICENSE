@@ -1,0 +1,42 @@
+SourceSight Proprietary License — Version 1.0
+Copyright (c) 2026 Jonah Chang. All rights reserved.
+
+1. Scope
+These terms cover original SourceSight code, documentation and branding owned
+by Jonah Chang ("Covered Material"). They do not claim ownership of third-party
+code, game data, system libraries or material owned by others.
+
+2. Limited permission
+You may download and run an official, unmodified release for your own personal,
+noncommercial use. You may inspect the published source, compile an unmodified
+copy for the same purpose, and keep a personal backup. No other permission is
+granted unless Jonah Chang provides it in writing.
+
+3. Reserved rights
+Except as permitted above or required by applicable law, you may not sell,
+rent, sublicense, redistribute or commercially host Covered Material; modify,
+adapt or create derivative works; incorporate it into another platform or
+product; distribute mods, patches or rebranded builds; remove rights notices;
+or use SourceSight branding to imply authorization or endorsement.
+Development and derivative-product rights are reserved to Jonah Chang.
+Public source visibility is not an open-source license.
+Permission requests: https://github.com/jonahchang207/sourcesight-linux
+
+4. Exceptions
+Third-party components retain their own licenses and rights. See
+THIRD_PARTY_NOTICES.md. The GPL-2.0 driver under drivers/ is separately licensed.
+These terms do not revoke rights validly granted under earlier licenses for
+earlier versions, restrict nonwaivable legal rights, or override GitHub's
+required permissions to view and fork public repositories through its service.
+No exclusive rights in general ideas or independent implementations are claimed.
+
+5. Termination
+The limited permission above terminates upon violation of these terms. This
+does not terminate independent rights described in section 4.
+
+6. Disclaimer
+THE COVERED MATERIAL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE
+COPYRIGHT HOLDER IS NOT LIABLE FOR CLAIMS, DAMAGES OR OTHER LIABILITY ARISING
+FROM THE MATERIAL OR ITS USE, WHETHER IN CONTRACT, TORT OR OTHERWISE.
