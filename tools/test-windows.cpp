@@ -8,7 +8,8 @@
 static void require(bool value,const char* message) { if(!value)throw std::runtime_error(message); }
 int RunChecks() {
     LogHelper::Init();
-    std::filesystem::remove("unicode-\u03A9.txt");
+    const std::filesystem::path unicode_path(L"unicode-\u03A9.txt");
+    std::filesystem::remove(unicode_path);
     std::filesystem::remove("replacement.txt");
     pProcess process;
     require(!process.AttachProcess("sourcesight-missing-process.exe"),"missing process is rejected");
@@ -20,10 +21,10 @@ int RunChecks() {
     require(process.GetModule("not-loaded.dll").base==0,"missing module returns empty");
     process.Close();process.Close();
     require(!process.handle_ && !process.pid_,"idempotent close resets attachment");
-    require(FileIO::WriteNew("unicode-\u03A9.txt","first"),"create Unicode path");
-    require(!FileIO::WriteNew("unicode-\u03A9.txt","second"),"exclusive create refuses overwrite");
+    require(FileIO::WriteNew(unicode_path,"first"),"create Unicode path");
+    require(!FileIO::WriteNew(unicode_path,"second"),"exclusive create refuses overwrite");
     require(FileIO::WriteNew("replacement.txt","replacement"),"create replacement");
-    std::error_code error;FileIO::Replace("replacement.txt","unicode-\u03A9.txt",error);
+    std::error_code error;FileIO::Replace("replacement.txt",unicode_path,error);
     require(!error,"atomically replace existing file on Windows");
     auto legacy=nlohmann::json{{"aim",{{"enabled",true}}},{"triggerbot",{{"enabled",true}}},
         {"spinbot",{{"enabled",true}}},{"macro",{{"awp_quickswitch",true}}},
