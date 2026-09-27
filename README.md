@@ -54,11 +54,12 @@ only appear while the menu is open; no startup help panel covers the game.
 the active profile and exits. Closing the menu also saves the profile.
 With the menu closed, mouse input passes through to the game and the overlay
 does not take keyboard focus when it reappears after switching applications.
-While CS2 shows its mouse cursor (buy menu, settings and other game menus),
-ESP temporarily hides so those menus remain clickable. It returns when gameplay
-captures the cursor. SourceSight's own menu stays visible when opened with Insert.
-Brief cursor changes are filtered to prevent flicker, and the click-through
-overlay leaves system cursor updates to the game.
+ESP stays visible during gameplay and while CS2 shows its mouse cursor (buy
+menu, settings and other game menus); those menus remain clickable through
+click-through passthrough without hiding the overlay. SourceSight's own menu
+stays visible when opened with Insert. Cursor snapshots are diagnostics-only
+because the system cursor state observes the overlay itself, and the
+click-through overlay leaves system cursor updates to the game.
 Profiles are stored under `configs/` in the working directory. Writes use
 flushed temporary files and Windows atomic replacement with a `.json.bak`
 backup. Linux visual profiles can be imported; automation sections are stripped.
@@ -117,7 +118,9 @@ radar calibration, synthetic geometry/visibility, actual OpenGL framebuffer
 pixels, Windows process reads/file replacement, legacy-profile removal, and
 the app's offline preview. A desktop composition regression checks that empty
 pixels reveal a colored window underneath while overlay graphics remain visible,
-including mouse hit testing, menu clickthrough toggles and focus preservation.
+including cross-thread WM_NCHITTEST hit testing, menu clickthrough toggles,
+cursor-noise stability with no hide/show cycle, and focus preservation. A
+headless visibility regression also runs on CI to catch repeated transitions.
 Tests do not attach to CS2. Framebuffer,
 desktop composition and preview checks require OpenGL 3.3; hosted CI runs the
 remaining checks because hosted

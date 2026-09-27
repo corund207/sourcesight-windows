@@ -191,6 +191,10 @@ bool Renderer::HandleWindowOrder() {
 
     auto foreground = GetForegroundWindow();
     this->isFocused = (foreground == Window::hwnd || foreground == p->hwnd_);
+    // Diagnostics-only cursor snapshot. It must not drive visibility:
+    // GetCursorInfo is system-global and observes our own topmost overlay, so
+    // hiding on "cursor visible" feeds a hide/show loop. Input routing uses
+    // WS_EX_TRANSPARENT passthrough instead, keeping ESP stable over game menus.
     CURSORINFO cursor{};cursor.cbSize=sizeof(cursor);
     const bool game_cursor_visible=GetCursorInfo(&cursor) && (cursor.flags&CURSOR_SHOWING);
     Window::UpdateGameplayVisibility(isFocused.load(),isOpen.load(),game_cursor_visible);

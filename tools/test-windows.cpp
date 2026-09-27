@@ -3,11 +3,35 @@
 #include "core/memory/Memory.hpp"
 #include "core/platform/FileIO.hpp"
 #include "config/Config.hpp"
+#include "gui/renderer/window/OverlayVisibility.hpp"
 #include <stdexcept>
 
 static void require(bool value,const char* message) { if(!value)throw std::runtime_error(message); }
+static void checkOverlayVisibilityStable() {
+    // Headless regression for the live ESP blink loop. GetCursorInfo observes
+    // the overlay itself, so cursor-driven hide/show oscillated; delays only
+    // slowed it. Stable policy is visible==focused with zero transitions
+    // under cursor noise. This runs on CI while overlay-composition needs GPU.
+    OverlayVisibility stable;
+    require(stable.Update(true,false,false,0),"gameplay starts visible");
+    require(stable.Transitions()==0,"no transition on first snapshot");
+    for(int i=0;i<50;++i) {
+        const bool cursor=(i%2)==0;
+        require(stable.Update(true,false,cursor,static_cast<std::uint64_t>(10+i*5)),
+                "cursor noise never hides stable ESP");
+    }
+    require(stable.Transitions()==0,"oscillating cursor causes no hide/show cycle");
+    require(stable.Update(true,true,true,1000),"menu stays visible with cursor");
+    require(stable.Update(true,false,true,1010),"game cursor keeps ESP visible");
+    require(stable.Transitions()==0,"visible cursor no longer hides ESP");
+    require(!stable.Update(false,false,false,1020),"focus loss hides immediately");
+    require(stable.Transitions()==1,"focus loss is one transition");
+    require(stable.Update(true,false,true,1030),"focus gain restores with cursor visible");
+    require(stable.Transitions()==2,"focus gain is second transition");
+}
 int RunChecks() {
     LogHelper::Init();
+    checkOverlayVisibilityStable();
     const std::filesystem::path unicode_path(L"unicode-\u03A9.txt");
     std::filesystem::remove(unicode_path);
     std::filesystem::remove("replacement.txt");

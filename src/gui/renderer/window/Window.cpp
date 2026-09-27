@@ -159,10 +159,21 @@ void Window::SetVisible(bool visible) {
         SetTopMost(hwnd);
     }
 }
+unsigned Window::VisibilityTransitions() {
+    return visibility.Transitions();
+}
 void Window::UpdateGameplayVisibility(bool focused,bool menu_open,bool game_cursor_visible) {
     if(!window)return;
-    // Native cursor menus must not have a foreign window above their mouse
-    // targets. Raw-input gameplay resumes the overlay when it hides the cursor.
+    // Stable ESP: stay visible whenever the game or overlay has foreground.
+    // Game cursor menus (buy/settings) remain clickable via WS_EX_TRANSPARENT
+    // passthrough, not by hiding. GetCursorInfo observes our own topmost
+    // window, so hiding on "cursor visible" feeds back into the sensor and
+    // blinks; the snapshot is only logged here to prove it no longer toggles.
+    const bool was_visible=IsWindowVisible(hwnd)!=FALSE;
     const bool visible=visibility.Update(focused,menu_open,game_cursor_visible,GetTickCount64());
-    if(visible!=(IsWindowVisible(hwnd)!=FALSE))SetVisible(visible);
+    if(visible!=was_visible) {
+        LOGF(VERBOSE,"Overlay visibility {} -> {} (focused={} menu_open={} cursor_visible={} transitions={})",
+             was_visible,visible,focused,menu_open,game_cursor_visible,visibility.Transitions());
+        SetVisible(visible);
+    }
 }

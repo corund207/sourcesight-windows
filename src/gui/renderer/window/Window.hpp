@@ -20,6 +20,7 @@ public:
     static void SetVSync(bool enabled=false);
     static void SetVisible(bool visible);
     static void UpdateGameplayVisibility(bool focused,bool menu_open,bool game_cursor_visible);
+    static unsigned VisibilityTransitions();
     inline static HWND hwnd=nullptr;
     inline static bool vsync=false;
     inline static bool shouldRun=true;

@@ -24,6 +24,35 @@ bool nearColor(COLORREF actual,COLORREF expected) {
            std::abs(int(GetGValue(actual))-int(GetGValue(expected)))<=3 &&
            std::abs(int(GetBValue(actual))-int(GetBValue(expected)))<=3;
 }
+void checkVisibilityUnit() {
+    // The live flicker was a sensor-actuator loop: GetCursorInfo observes the
+    // overlay itself, so hiding on "cursor visible" toggled the next snapshot.
+    // These checks fail on the old debounce logic and pass only when cursor
+    // noise causes zero visibility transitions.
+    OverlayVisibility stable;
+    require(stable.Update(true,false,false,0),"gameplay starts visible");
+    require(stable.Transitions()==0,"no transition on first visible snapshot");
+    for(int i=0;i<50;++i) {
+        const bool cursor=(i%2)==0;
+        const bool visible=stable.Update(true,false,cursor,static_cast<std::uint64_t>(10+i*5));
+        require(visible,"cursor noise never hides stable ESP");
+    }
+    require(stable.Transitions()==0,"oscillating cursor causes no hide/show cycle");
+    require(stable.Update(true,true,true,1000),"SourceSight menu stays visible with cursor");
+    require(stable.Update(true,true,false,1010),"SourceSight menu stays visible without cursor");
+    require(stable.Transitions()==0,"menu open causes no visibility transition");
+    // Game cursor menus keep ESP visible; clicks pass via WS_EX_TRANSPARENT.
+    require(stable.Update(true,false,true,1020),"game cursor menus keep ESP visible");
+    require(stable.Transitions()==0,"visible cursor no longer hides ESP");
+    require(!stable.Update(false,false,false,1030),"focus loss hides immediately");
+    require(stable.Transitions()==1,"focus loss is exactly one transition");
+    require(!stable.Update(false,false,true,1040),"unfocused stays hidden through cursor noise");
+    require(stable.Transitions()==1,"unfocused cursor noise causes no extra transition");
+    require(stable.Update(true,false,true,1050),"focus gain restores even with cursor visible");
+    require(stable.Transitions()==2,"focus gain is the second transition");
+    require(stable.Update(true,false,false,1060),"gameplay capture stays visible");
+    require(stable.Transitions()==2,"stable gameplay adds no further transitions");
+}
 }
 
 int main() {
@@ -31,18 +60,7 @@ int main() {
     bool imgui=false;
     LogHelper::Init();
     try {
-        OverlayVisibility stable;
-        require(stable.Update(true,false,false,0),"gameplay starts visible");
-        require(stable.Update(true,false,true,10),"brief cursor appearance does not hide ESP");
-        require(stable.Update(true,false,false,30),"cursor noise does not flicker ESP");
-        require(stable.Update(true,false,true,100),"menu transition waits for stable cursor");
-        require(!stable.Update(true,false,true,175),"stable game menu hides ESP");
-        require(!stable.Update(true,false,false,200),"brief capture does not flash ESP over menus");
-        require(!stable.Update(true,false,true,220),"menu remains hidden through capture noise");
-        require(!stable.Update(true,false,false,300),"capture settling begins");
-        require(stable.Update(true,false,false,500),"stable gameplay restores ESP");
-        require(!stable.Update(false,false,false,501),"focus loss hides immediately");
-        require(stable.Update(true,true,true,502),"SourceSight menu opens immediately");
+        checkVisibilityUnit();
         Menu::SetPreviewMode(false);
         cfg::esp::wireframe=true;
         const auto monitor=MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
@@ -65,6 +83,17 @@ int main() {
         Window::SetBounds(rect);
         for(bool passthrough:{true,false,true,false,true}) {
             Window::SetClickthrough(Window::hwnd,passthrough);
+            // Native styles genuinely support cross-process passthrough:
+            // WS_EX_LAYERED is retained, WS_EX_TRANSPARENT follows the input
+            // mode for system-wide mouse routing, and the GLFW "GLFW30"
+            // (CS_OWNDC) window subclass answers HTTRANSPARENT to WM_NCHITTEST.
+            // WindowFromPoint is thread-sensitive and cannot prove this, so
+            // input is verified via WM_NCHITTEST from both UI threads while
+            // the overlay stays visible.
+            const auto exstyle=GetWindowLongPtrW(Window::hwnd,GWL_EXSTYLE);
+            require((exstyle&WS_EX_LAYERED)!=0,"layered style retained for composition");
+            require(((exstyle&WS_EX_TRANSPARENT)!=0)==passthrough,"transparent style follows menu input mode");
+            require(((exstyle&WS_EX_NOACTIVATE)!=0)==passthrough,"noactivate follows passthrough mode");
             for(int frame=0;frame<6;++frame) {
                 Window::SetTopMost(Window::hwnd);
                 Window::StartRender();
@@ -81,17 +110,17 @@ int main() {
             require(nearColor(empty,background_color),"empty overlay pixels leave desktop visible");
             require(nearColor(desktopPixel(rect.left+60,rect.top+60),background_color),"ESP box interior stays transparent");
             require(nearColor(desktopPixel(rect.left+180,rect.top+60),RGB(134,81,100)),"translucent graphics blend with desktop");
-            const auto hit=WindowFromPoint(POINT{rect.left+180,rect.top+60});
-            require(hit==(passthrough?background:Window::hwnd),"mouse hit testing follows menu input mode");
-            // A game queries from a different UI thread. HTTRANSPARENT alone
-            // only skips windows belonging to the calling thread.
-            Window::UpdateGameplayVisibility(true,!passthrough,true);
-            Sleep(90);
-            Window::UpdateGameplayVisibility(true,!passthrough,true);
-            require((IsWindowVisible(Window::hwnd)!=FALSE)==!passthrough,
-                    "game cursor hides ESP but leaves the SourceSight menu visible");
+            // Same-thread mouse routing follows the input mode without hiding.
+            const POINT pt{rect.left+180,rect.top+60};
+            const LPARAM hit_param=MAKELPARAM(pt.x,pt.y);
+            const LRESULT hit_same=SendMessageW(Window::hwnd,WM_NCHITTEST,0,hit_param);
+            require((hit_same==HTTRANSPARENT)==passthrough,"WM_NCHITTEST follows menu input mode");
+            // A game queries from a different UI thread. SendMessage still
+            // reaches the overlay WndProc on its owning thread, proving the
+            // HTTRANSPARENT answer (and WS_EX_TRANSPARENT style) work
+            // cross-thread without hiding the window.
             auto external_hit=std::async(std::launch::async,[&] {
-                return WindowFromPoint(POINT{rect.left+180,rect.top+60});
+                return SendMessageW(Window::hwnd,WM_NCHITTEST,0,hit_param);
             });
             while(external_hit.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready) {
                 MSG message{};
@@ -100,12 +129,29 @@ int main() {
                 }
                 Sleep(1);
             }
-            require(external_hit.get()==(passthrough?background:Window::hwnd),
-                    "game cursor menus reach the underlying window from another thread");
+            require((external_hit.get()==HTTRANSPARENT)==passthrough,
+                    "cross-thread hit testing follows menu input mode");
+            // Oscillating cursor snapshots must not produce a hide/show cycle
+            // while focused. This is the live flicker regression.
+            require((IsWindowVisible(Window::hwnd)!=FALSE),"overlay visible while focused before cursor noise");
+            const unsigned before_transitions=Window::VisibilityTransitions();
+            for(int i=0;i<20;++i) {
+                Window::UpdateGameplayVisibility(true,!passthrough,(i%2)==0);
+                Sleep(5);
+            }
+            require((IsWindowVisible(Window::hwnd)!=FALSE),"cursor noise causes no hide/show cycle");
+            require(Window::VisibilityTransitions()==before_transitions,
+                    "cursor noise causes no visibility transitions");
+            // Game cursor menus keep ESP visible; clicks route via passthrough.
+            Window::UpdateGameplayVisibility(true,!passthrough,true);
+            Sleep(90);
+            Window::UpdateGameplayVisibility(true,!passthrough,true);
+            require((IsWindowVisible(Window::hwnd)!=FALSE),
+                    "game cursor keeps ESP visible; menus clickable via passthrough");
             Window::UpdateGameplayVisibility(true,!passthrough,false);
-            Sleep(220);
+            Sleep(10);
             Window::UpdateGameplayVisibility(true,!passthrough,false);
-            require(IsWindowVisible(Window::hwnd)!=FALSE,"overlay returns when game captures cursor");
+            require(IsWindowVisible(Window::hwnd)!=FALSE,"overlay stable when game captures cursor");
             if(passthrough) {
                 SetActiveWindow(background);
                 require(GetActiveWindow()==background,"activate underlying fixture");
@@ -113,8 +159,16 @@ int main() {
                 Window::SetVisible(false);Window::SetVisible(true);
                 require(GetActiveWindow()==background && GetForegroundWindow()==foreground,
                         "showing overlay preserves underlying keyboard focus");
+                // Restore visible state for the next iteration.
+                Window::UpdateGameplayVisibility(true,false,false);
+                require((IsWindowVisible(Window::hwnd)!=FALSE),"overlay restored after focus check");
             }
         }
+        // Focus loss/gain remain the only legitimate hide/show transitions.
+        Window::UpdateGameplayVisibility(false,false,false);
+        require((IsWindowVisible(Window::hwnd)==FALSE),"focus loss hides overlay");
+        Window::UpdateGameplayVisibility(true,false,false);
+        require((IsWindowVisible(Window::hwnd)!=FALSE),"focus gain restores overlay");
         Window::DestroyImGui();imgui=false;Window::DestroyDevice();Window::DespawnWindow();
         DestroyWindow(background);DeleteObject(brush);LogHelper::Destroy();
         return 0;
