@@ -1,4 +1,5 @@
 #include "Window.hpp"
+#include "OverlayVisibility.hpp"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -13,6 +14,7 @@ namespace {
 GLFWwindow* window=nullptr;
 bool first_frame=true,clickthrough=false;
 WNDPROC original_proc=nullptr;
+OverlayVisibility visibility;
 LRESULT CALLBACK OverlayProc(HWND target,UINT message,WPARAM wparam,LPARAM lparam) {
     if(clickthrough) {
         if(message==WM_NCHITTEST)return HTTRANSPARENT;
@@ -26,6 +28,7 @@ bool Window::SpawnWindow() {
     if(!glfwInit())return false;
     const bool preview=Menu::IsPreviewMode();
     first_frame=true;
+    visibility=OverlayVisibility{};
     glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
     glfwWindowHint(GLFW_OPENGL_PROFILE,GLFW_OPENGL_COMPAT_PROFILE);
@@ -82,6 +85,9 @@ void Window::DestroyImGui() {
 }
 void Window::StartRender() {
     glfwPollEvents();shouldRun=window && !glfwWindowShouldClose(window);
+    auto& io=ImGui::GetIO();
+    if(clickthrough)io.ConfigFlags|=ImGuiConfigFlags_NoMouseCursorChange;
+    else io.ConfigFlags&=~ImGuiConfigFlags_NoMouseCursorChange;
     ImGui_ImplOpenGL3_NewFrame();ImGui_ImplGlfw_NewFrame();
     if(!Menu::IsPreviewMode())ImGui::GetIO().DisplaySize.x-=1.f;
     ImGui::GetIO().AddKeyEvent(ImGuiKey_F9,(GetAsyncKeyState(VK_F9)&0x8000)!=0);
@@ -157,6 +163,6 @@ void Window::UpdateGameplayVisibility(bool focused,bool menu_open,bool game_curs
     if(!window)return;
     // Native cursor menus must not have a foreign window above their mouse
     // targets. Raw-input gameplay resumes the overlay when it hides the cursor.
-    const bool visible=focused && (menu_open || !game_cursor_visible);
+    const bool visible=visibility.Update(focused,menu_open,game_cursor_visible,GetTickCount64());
     if(visible!=(IsWindowVisible(hwnd)!=FALSE))SetVisible(visible);
 }

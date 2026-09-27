@@ -57,6 +57,8 @@ does not take keyboard focus when it reappears after switching applications.
 While CS2 shows its mouse cursor (buy menu, settings and other game menus),
 ESP temporarily hides so those menus remain clickable. It returns when gameplay
 captures the cursor. SourceSight's own menu stays visible when opened with Insert.
+Brief cursor changes are filtered to prevent flicker, and the click-through
+overlay leaves system cursor updates to the game.
 Profiles are stored under `configs/` in the working directory. Writes use
 flushed temporary files and Windows atomic replacement with a `.json.bak`
 backup. Linux visual profiles can be imported; automation sections are stripped.

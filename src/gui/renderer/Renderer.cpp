@@ -191,7 +191,7 @@ bool Renderer::HandleWindowOrder() {
 
     auto foreground = GetForegroundWindow();
     this->isFocused = (foreground == Window::hwnd || foreground == p->hwnd_);
-    CURSORINFO cursor{sizeof(cursor)};
+    CURSORINFO cursor{};cursor.cbSize=sizeof(cursor);
     const bool game_cursor_visible=GetCursorInfo(&cursor) && (cursor.flags&CURSOR_SHOWING);
     Window::UpdateGameplayVisibility(isFocused.load(),isOpen.load(),game_cursor_visible);
 

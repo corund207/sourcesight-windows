@@ -1,6 +1,7 @@
 #include "common.hpp"
 #include "gui/frontend/menu/Menu.hpp"
 #include "gui/renderer/window/Window.hpp"
+#include "gui/renderer/window/OverlayVisibility.hpp"
 #include <dwmapi.h>
 #include <iostream>
 
@@ -30,6 +31,18 @@ int main() {
     bool imgui=false;
     LogHelper::Init();
     try {
+        OverlayVisibility stable;
+        require(stable.Update(true,false,false,0),"gameplay starts visible");
+        require(stable.Update(true,false,true,10),"brief cursor appearance does not hide ESP");
+        require(stable.Update(true,false,false,30),"cursor noise does not flicker ESP");
+        require(stable.Update(true,false,true,100),"menu transition waits for stable cursor");
+        require(!stable.Update(true,false,true,175),"stable game menu hides ESP");
+        require(!stable.Update(true,false,false,200),"brief capture does not flash ESP over menus");
+        require(!stable.Update(true,false,true,220),"menu remains hidden through capture noise");
+        require(!stable.Update(true,false,false,300),"capture settling begins");
+        require(stable.Update(true,false,false,500),"stable gameplay restores ESP");
+        require(!stable.Update(false,false,false,501),"focus loss hides immediately");
+        require(stable.Update(true,true,true,502),"SourceSight menu opens immediately");
         Menu::SetPreviewMode(false);
         cfg::esp::wireframe=true;
         const auto monitor=MonitorFromPoint(POINT{0,0},MONITOR_DEFAULTTOPRIMARY);
@@ -53,6 +66,7 @@ int main() {
         for(bool passthrough:{true,false,true,false,true}) {
             Window::SetClickthrough(Window::hwnd,passthrough);
             for(int frame=0;frame<6;++frame) {
+                Window::SetTopMost(Window::hwnd);
                 Window::StartRender();
                 require(ImGui::GetIO().DisplaySize.x==float(rect.right-rect.left),"render coordinates match game width");
                 auto* draw=ImGui::GetForegroundDrawList();
@@ -72,6 +86,8 @@ int main() {
             // A game queries from a different UI thread. HTTRANSPARENT alone
             // only skips windows belonging to the calling thread.
             Window::UpdateGameplayVisibility(true,!passthrough,true);
+            Sleep(90);
+            Window::UpdateGameplayVisibility(true,!passthrough,true);
             require((IsWindowVisible(Window::hwnd)!=FALSE)==!passthrough,
                     "game cursor hides ESP but leaves the SourceSight menu visible");
             auto external_hit=std::async(std::launch::async,[&] {
@@ -86,6 +102,8 @@ int main() {
             }
             require(external_hit.get()==(passthrough?background:Window::hwnd),
                     "game cursor menus reach the underlying window from another thread");
+            Window::UpdateGameplayVisibility(true,!passthrough,false);
+            Sleep(220);
             Window::UpdateGameplayVisibility(true,!passthrough,false);
             require(IsWindowVisible(Window::hwnd)!=FALSE,"overlay returns when game captures cursor");
             if(passthrough) {
