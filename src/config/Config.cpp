@@ -465,7 +465,6 @@ bool Config::ReadImpl(const std::string& path) {
 		cfg::esp::wireframe = data["esp"].value("wireframe", false);
 		cfg::esp::wireframe_mode = std::clamp(data["esp"].value("wireframe_mode", 0), 0, 1);
 		cfg::esp::wireframe_full_xray = data["esp"].value("wireframe_full_xray", false);
-		cfg::esp::wireframe_blackout = data["esp"].value("wireframe_blackout", false);
 		cfg::esp::wireframe_panel_opacity = std::clamp(data["esp"].value("wireframe_panel_opacity", .10f), 0.f, .35f);
 		// Ignore legacy wireframe_occlude_game: its forced opaque fill hid the game.
 		cfg::esp::wireframe_max_dist = data["esp"].value("wireframe_max_dist", 3000.0f);
@@ -476,7 +475,7 @@ bool Config::ReadImpl(const std::string& path) {
 			namespace vm = cfg::esp::viewmodel_wireframe;
 			const auto object = data["esp"].value("viewmodel_wireframe", nlohmann::json::object());
 			const auto settings = object.is_object() ? object : nlohmann::json::object();
-			vm::enabled = settings.value("enabled", true);
+			vm::enabled = settings.value("enabled", false);
 			vm::opacity = std::clamp(settings.value("opacity", .9f), .2f, 1.f);
 			vm::scale = std::clamp(settings.value("scale", 1.f), .7f, 1.35f);
 		}
@@ -685,7 +684,8 @@ json Config::BuildCurrentJson(json data) {
 	data["esp"]["wireframe"] = cfg::esp::wireframe;
 	data["esp"]["wireframe_mode"] = cfg::esp::wireframe_mode;
 	data["esp"]["wireframe_full_xray"] = cfg::esp::wireframe_full_xray;
-	data["esp"]["wireframe_blackout"] = cfg::esp::wireframe_blackout;
+	data["esp"].erase("wireframe_blackout");
+	data["esp"].erase("wireframe_occlude_game");
 	data["esp"]["wireframe_panel_opacity"] = cfg::esp::wireframe_panel_opacity;
 	data["esp"]["wireframe_max_dist"] = cfg::esp::wireframe_max_dist;
 	data["esp"]["wireframe_budget"] = cfg::esp::wireframe_budget;

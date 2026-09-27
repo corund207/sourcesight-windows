@@ -44,6 +44,11 @@ application. Rendering requires an OpenGL 3.3 capable graphics driver.
 Start CS2 in windowed or borderless mode, then start `sourcesight.exe`.
 The app waits briefly for `cs2.exe`, uses its client area for the overlay,
 hides when another app has focus, and closes when the game exits.
+Empty overlay pixels are transparent. The native window includes one transparent
+padding column to keep Windows desktop composition active on borderless monitors;
+rendering coordinates still match the game's client area. Full-screen blackout
+is removed, including legacy profile settings. The menu and status watermark
+only appear while the menu is open; no startup help panel covers the game.
 
 **Insert** opens/closes the menu. **F9** disables the overlay. **End** saves
 the active profile and exits. Closing the menu also saves the profile.
@@ -103,8 +108,11 @@ desktop, not just CS2.
 CTest includes profile recovery, cache lifecycle, four-tab menu interactions,
 radar calibration, synthetic geometry/visibility, actual OpenGL framebuffer
 pixels, Windows process reads/file replacement, legacy-profile removal, and
-the app's offline preview. Tests do not attach to CS2. Framebuffer and preview
-checks require OpenGL 3.3; hosted CI runs the remaining checks because hosted
+the app's offline preview. A desktop composition regression checks that empty
+pixels reveal a colored window underneath while overlay graphics remain visible,
+including menu clickthrough toggles. Tests do not attach to CS2. Framebuffer,
+desktop composition and preview checks require OpenGL 3.3; hosted CI runs the
+remaining checks because hosted
 Windows machines may only provide OpenGL 1.1.
 
 ```powershell

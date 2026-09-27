@@ -134,10 +134,8 @@ void Renderer::Render() {
     Esp::Render();
     Overlays::Render();
 
-    Menu::RenderStartupHelp();
     if (isOpen) {
         Menu::Render();
-    } else {
     }
 
     Window::EndRender();
@@ -231,15 +229,7 @@ bool Renderer::HandleWindowOrder() {
 
     RECT screen_rect = { top_left.x, top_left.y, bottom_right.x, bottom_right.y };
 
-    SetWindowPos(
-        Window::hwnd,
-        HWND_TOPMOST,
-        screen_rect.left,
-        screen_rect.top,
-        screen_rect.right - screen_rect.left,
-        screen_rect.bottom - screen_rect.top,
-        SWP_NOACTIVATE | SWP_SHOWWINDOW
-    );
+    Window::SetBounds(screen_rect);
 
     last_rect = window_rect;
 

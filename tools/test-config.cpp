@@ -33,7 +33,6 @@ int RunChecks() {
     const auto profiles = root / "configs";
 
     cfg::enabled = false;
-    cfg::esp::wireframe_blackout = true;
     cfg::esp::viewmodel_wireframe::enabled = true;
     cfg::esp::viewmodel_wireframe::opacity = .72f;
     cfg::esp::viewmodel_wireframe::scale = 1.18f;
@@ -45,24 +44,26 @@ int RunChecks() {
     require(saved.value("schema_version", -1) == Config::SchemaVersion(), "schema version written");
     require(saved["utils"]["advanced_controls"].get<bool>(), "advanced control mode persists");
     saved["esp"]["bullet_tracer"]["length"] = 2048.f;
+    saved["esp"]["wireframe_blackout"] = true;
+    saved["esp"]["wireframe_occlude_game"] = true;
     saved["unknown_extension"] = { {"preserved", true} };
     write_json(roundtrip, saved);
     cfg::enabled = true;
-    cfg::esp::wireframe_blackout = false;
     cfg::esp::viewmodel_wireframe::enabled = false;
     cfg::esp::viewmodel_wireframe::opacity = .9f;
     cfg::esp::viewmodel_wireframe::scale = 1.f;
     cfg::world::radar::calibration_height = 0.f;
     require(Config::LoadProfile("roundtrip"), "round trip load");
     require(cfg::world::radar::calibration_height == 1024.f, "radar resolution calibration persists");
-    require(cfg::esp::wireframe_blackout, "dark map setting persists");
     require(cfg::esp::viewmodel_wireframe::enabled &&
             std::abs(cfg::esp::viewmodel_wireframe::opacity - .72f) < .001f &&
             std::abs(cfg::esp::viewmodel_wireframe::scale - 1.18f) < .001f,
-            "dark map viewmodel settings persist");
+            "viewmodel settings persist");
     require(!cfg::enabled, "round trip applies stored setting");
     require(Config::Write(), "round trip rewrite");
     const auto rewritten = read_json(roundtrip);
+    require(!rewritten["esp"].contains("wireframe_blackout") &&
+            !rewritten["esp"].contains("wireframe_occlude_game"),"legacy blackout settings removed on rewrite");
     require(rewritten["unknown_extension"]["preserved"].get<bool>(), "unknown field preserved");
     require(!rewritten["esp"]["bullet_tracer"].contains("length"), "legacy tracer distance removed on rewrite");
     require(std::filesystem::exists(roundtrip.string() + ".bak"), "previous-good profile backup created");

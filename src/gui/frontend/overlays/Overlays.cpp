@@ -44,12 +44,12 @@ bool Overlays::InitImpl() {
 void Overlays::RenderImpl() {
     ImGui::PushFont(this->font);
     {
-        RenderWatermark();
+        if(Renderer::IsOpen())RenderWatermark();
 
 
 
     #ifdef _DEBUG
-        RenderDebugWindow();
+        if(Renderer::IsOpen())RenderDebugWindow();
     #endif
 
     }

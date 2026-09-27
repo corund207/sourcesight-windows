@@ -204,7 +204,7 @@ Shape Classify(short item_index) {
 void Render(const Player& local, ImVec2 display_size, ImDrawList* draw, ImFont* icon_font) {
     namespace settings = cfg::esp::viewmodel_wireframe;
     if (!draw || !local.alive || local.weapon.item_index < 0 || !cfg::esp::wireframe ||
-        !cfg::esp::wireframe_blackout || !settings::enabled ||
+        !settings::enabled ||
         !std::isfinite(display_size.x) || !std::isfinite(display_size.y) ||
         display_size.x < 320.f || display_size.y < 240.f)
         return;

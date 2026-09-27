@@ -9,11 +9,13 @@
 #include "gui/frontend/menu/Menu.hpp"
 #include "gui/renderer/FullMapRenderer.hpp"
 #include <fstream>
-namespace { GLFWwindow* window=nullptr; }
+namespace { GLFWwindow* window=nullptr; bool first_frame=true; }
 bool Window::SpawnWindow() {
     glfwSetErrorCallback([](int code,const char* message) { LOGF(WARNING,"GLFW {}: {}",code,message); });
     if(!glfwInit())return false;
     const bool preview=Menu::IsPreviewMode();
+    first_frame=true;
+    glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
     glfwWindowHint(GLFW_OPENGL_PROFILE,GLFW_OPENGL_COMPAT_PROFILE);
     glfwWindowHint(GLFW_ALPHA_BITS,8);glfwWindowHint(GLFW_DEPTH_BITS,24);
@@ -24,7 +26,10 @@ bool Window::SpawnWindow() {
     glfwWindowHint(GLFW_MOUSE_PASSTHROUGH,preview?GLFW_FALSE:GLFW_TRUE);
     const auto* mode=glfwGetVideoMode(glfwGetPrimaryMonitor());
     if(!mode) { glfwTerminate();return false; }
-    window=glfwCreateWindow(preview?1280:mode->width,preview?900:mode->height,
+    // An undecorated window matching the monitor exactly can bypass desktop
+    // composition on Windows/AMD, turning zero-alpha pixels solid black.
+    // Keep one transparent padding column outside the game's rendered area.
+    window=glfwCreateWindow(preview?1280:mode->width+1,preview?900:mode->height,
                             "SourceSight Windows",nullptr,nullptr);
     if(!window) { glfwTerminate();return false; }
     hwnd=glfwGetWin32Window(window);
@@ -64,14 +69,15 @@ void Window::DestroyImGui() {
 void Window::StartRender() {
     glfwPollEvents();shouldRun=window && !glfwWindowShouldClose(window);
     ImGui_ImplOpenGL3_NewFrame();ImGui_ImplGlfw_NewFrame();
+    if(!Menu::IsPreviewMode())ImGui::GetIO().DisplaySize.x-=1.f;
     ImGui::GetIO().AddKeyEvent(ImGuiKey_F9,(GetAsyncKeyState(VK_F9)&0x8000)!=0);
     ImGui::NewFrame();
 }
 void Window::EndRender() {
     ImGui::Render();int width=0,height=0;glfwGetFramebufferSize(window,&width,&height);
+    if(!Menu::IsPreviewMode())--width;
     glViewport(0,0,width,height);glDisable(GL_SCISSOR_TEST);glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
-    const bool blackout=cfg::enabled&&cfg::esp::wireframe&&cfg::esp::wireframe_blackout;
-    glClearColor(0,0,0,(blackout||Menu::IsPreviewMode())?1.f:0.f);glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0,0,0,Menu::IsPreviewMode()?1.f:0.f);glClear(GL_COLOR_BUFFER_BIT);
     if(cfg::enabled&&cfg::esp::wireframe&&cfg::esp::wireframe_mode==1) {
         const auto snapshot=Cache::CopySnapshot();
         if(snapshot.status.ready())FullMapRenderer::Render(snapshot.game.view_matrix);
@@ -92,6 +98,14 @@ void Window::EndRender() {
         out.write(reinterpret_cast<const char*>(pixels.data()),pixels.size());
     }
     glfwSwapBuffers(window);
+    // Publish a cleared/rendered framebuffer before showing the native window.
+    if(first_frame) { first_frame=false;glfwShowWindow(window); }
+}
+void Window::SetBounds(const RECT& bounds) {
+    if(!window)return;
+    SetWindowPos(hwnd,HWND_TOPMOST,bounds.left,bounds.top,
+                 bounds.right-bounds.left+(Menu::IsPreviewMode()?0:1),bounds.bottom-bounds.top,
+                 SWP_NOACTIVATE);
 }
 void Window::SetTopMost(HWND target,bool enabled) {
     SetWindowPos(target,enabled?HWND_TOPMOST:HWND_NOTOPMOST,0,0,0,0,

@@ -14,6 +14,7 @@ public:
     static void StartRender();
     static void EndRender();
     static void SetTopMost(NativeWindow window,bool enabled=true);
+    static void SetBounds(const RECT& client_bounds);
     static void SetClickthrough(NativeWindow window,bool enabled=true);
     static bool SetAffinity(NativeWindow window,WindowAffinity affinity);
     static void SetVSync(bool enabled=false);

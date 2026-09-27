@@ -104,8 +104,8 @@ int main() {
         Require(Menu::PreviewNavigateSearch("radar"),"search matches option aliases");
         Frame();
         Require(Menu::PreviewActiveTab()==Tab::WORLD,"search navigates to world");
-        Require(Menu::PreviewNavigateSearch("dark map"),"search finds the dark map toggle");
-        Require(Menu::PreviewNavigateSearch("weapon hands"),"search finds the dark map viewmodel toggle");
+        Require(!Menu::PreviewNavigateSearch("dark map"),"blackout controls removed from search");
+        Require(Menu::PreviewNavigateSearch("weapon hands"),"search finds the viewmodel toggle");
         Require(Menu::PreviewNavigateSearch("automatic calibration"),"search finds setup mode");
         Require(!Menu::PreviewNavigateSearch("nothing-matches-this"),"search has no-result state");
         Require(!Menu::PreviewNavigateSearch("aim"),"aim controls removed from search");

@@ -66,7 +66,6 @@ int main(int argc, char** argv) {
     local_viewmodel.weapon.icon="A";
     local_viewmodel.ammo=30;
     cfg::esp::wireframe=true;
-    cfg::esp::wireframe_blackout=true;
     cfg::esp::viewmodel_wireframe::enabled=true;
     auto render_viewmodel=[&] {
         ImGui::NewFrame();
@@ -82,9 +81,9 @@ int main(int argc, char** argv) {
     local_viewmodel.weapon.item_index=weapon_smokegrenade;
     local_viewmodel.weapon.name="Smoke Grenade";
     require(render_viewmodel()>100,"selected grenade draws equipment and hand wireframes");
-    cfg::esp::wireframe_blackout=false;
-    require(render_viewmodel()==0,"viewmodel stays hidden outside dark map mode");
-    cfg::esp::wireframe_blackout=true;
+    cfg::esp::viewmodel_wireframe::enabled=false;
+    require(render_viewmodel()==0,"viewmodel stays hidden unless enabled");
+    cfg::esp::viewmodel_wireframe::enabled=true;
     // Compare batched AA positions/UVs against ImGui's regular line renderer.
     const std::array<WireframeLines::Line,2> line_fixture{{{{20,30},{150,70},IM_COL32_WHITE},
                                                         {{40,100},{80,10},IM_COL32(80,160,90,180)}}};

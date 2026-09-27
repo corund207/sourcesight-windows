@@ -58,7 +58,6 @@ namespace cfg {
 		inline bool wireframe = false;
 		inline int wireframe_mode = 0; // Overlay / translucent full-map GPU view.
 		inline bool wireframe_full_xray = false;
-		inline bool wireframe_blackout = false;
 		inline float wireframe_panel_opacity = 0.10f;
 		inline float wireframe_max_dist = 3000.0f;
 		inline int wireframe_budget = 6000;
@@ -66,7 +65,7 @@ namespace cfg {
 		inline color_t wireframe_color{ 100.f / 255.f, 215.f / 255.f, 220.f / 255.f, 1.f };
 
 		namespace viewmodel_wireframe {
-			inline bool enabled = true;
+			inline bool enabled = false;
 			inline float opacity = 0.9f;
 			inline float scale = 1.0f;
 		}
