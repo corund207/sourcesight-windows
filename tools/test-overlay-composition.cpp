@@ -24,6 +24,24 @@ bool nearColor(COLORREF actual,COLORREF expected) {
            std::abs(int(GetGValue(actual))-int(GetGValue(expected)))<=3 &&
            std::abs(int(GetBValue(actual))-int(GetBValue(expected)))<=3;
 }
+HWND systemHitTest(POINT pt) {
+    // Mimic Win32 mouse routing: walk top-level windows in Z-order and query
+    // WM_NCHITTEST until one does not return HTTRANSPARENT. Hidden/disabled
+    // windows are skipped. Direct SendMessage to the overlay alone cannot
+    // prove the OS skips it; this chain can.
+    const LPARAM param=MAKELPARAM(pt.x,pt.y);
+    for(HWND candidate=GetTopWindow(nullptr);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT)) {
+        if(!IsWindowVisible(candidate) || !IsWindowEnabled(candidate))continue;
+        // Skip our own fixture lookup scope to top-level only.
+        if(GetParent(candidate)!=nullptr)continue;
+        const LRESULT hit=SendMessageW(candidate,WM_NCHITTEST,0,param);
+        if(hit==HTTRANSPARENT || hit==HTNOWHERE)continue;
+        RECT area{};
+        if(!GetWindowRect(candidate,&area) || !PtInRect(&area,pt))continue;
+        return candidate;
+    }
+    return nullptr;
+}
 void checkVisibilityUnit() {
     // The live flicker was a sensor-actuator loop: GetCursorInfo observes the
     // overlay itself, so hiding on "cursor visible" toggled the next snapshot.
@@ -131,6 +149,15 @@ int main() {
             }
             require((external_hit.get()==HTTRANSPARENT)==passthrough,
                     "cross-thread hit testing follows menu input mode");
+            // System-level routing: the OS walks Z-order until a window stops
+            // returning HTTRANSPARENT. When passthrough, the chain must skip
+            // the visible overlay and land on the fixture below; when
+            // interactive it must stop at the overlay. This catches stale
+            // WS_EX_TRANSPARENT state (missing SWP_FRAMECHANGED) that direct
+            // SendMessage alone cannot.
+            const HWND routed=systemHitTest(pt);
+            require((routed==Window::hwnd)==!passthrough,
+                    "system Z-order routing reaches game target via passthrough");
             // Oscillating cursor snapshots must not produce a hide/show cycle
             // while focused. This is the live flicker regression.
             require((IsWindowVisible(Window::hwnd)!=FALSE),"overlay visible while focused before cursor noise");

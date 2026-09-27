@@ -139,6 +139,11 @@ void Window::SetClickthrough(HWND target,bool enabled) {
     if(enabled)style|=WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_NOACTIVATE;
     else style&=~(WS_EX_TRANSPARENT|WS_EX_NOACTIVATE);
     SetWindowLongPtrW(target,GWL_EXSTYLE,style);
+    // Force the window manager to refresh cached hit-testing after exStyle
+    // changes; without FRAMECHANGED the TRANSPARENT bit can be set in
+    // GetWindowLong yet still hit-test as interactive, blocking game menus.
+    SetWindowPos(target,HWND_TOPMOST,0,0,0,0,
+                 SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_FRAMECHANGED);
     // Initialize layered-window attributes explicitly. GLFW's passthrough
     // path can leave a newly layered window with zero attribute flags.
     if(enabled)SetLayeredWindowAttributes(target,0,255,LWA_ALPHA);
