@@ -69,6 +69,25 @@ int main() {
             require(nearColor(desktopPixel(rect.left+180,rect.top+60),RGB(134,81,100)),"translucent graphics blend with desktop");
             const auto hit=WindowFromPoint(POINT{rect.left+180,rect.top+60});
             require(hit==(passthrough?background:Window::hwnd),"mouse hit testing follows menu input mode");
+            // A game queries from a different UI thread. HTTRANSPARENT alone
+            // only skips windows belonging to the calling thread.
+            Window::UpdateGameplayVisibility(true,!passthrough,true);
+            require((IsWindowVisible(Window::hwnd)!=FALSE)==!passthrough,
+                    "game cursor hides ESP but leaves the SourceSight menu visible");
+            auto external_hit=std::async(std::launch::async,[&] {
+                return WindowFromPoint(POINT{rect.left+180,rect.top+60});
+            });
+            while(external_hit.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready) {
+                MSG message{};
+                while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) {
+                    TranslateMessage(&message);DispatchMessageW(&message);
+                }
+                Sleep(1);
+            }
+            require(external_hit.get()==(passthrough?background:Window::hwnd),
+                    "game cursor menus reach the underlying window from another thread");
+            Window::UpdateGameplayVisibility(true,!passthrough,false);
+            require(IsWindowVisible(Window::hwnd)!=FALSE,"overlay returns when game captures cursor");
             if(passthrough) {
                 SetActiveWindow(background);
                 require(GetActiveWindow()==background,"activate underlying fixture");

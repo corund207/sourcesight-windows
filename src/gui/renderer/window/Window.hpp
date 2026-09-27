@@ -19,6 +19,7 @@ public:
     static bool SetAffinity(NativeWindow window,WindowAffinity affinity);
     static void SetVSync(bool enabled=false);
     static void SetVisible(bool visible);
+    static void UpdateGameplayVisibility(bool focused,bool menu_open,bool game_cursor_visible);
     inline static HWND hwnd=nullptr;
     inline static bool vsync=false;
     inline static bool shouldRun=true;

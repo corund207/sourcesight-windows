@@ -153,3 +153,10 @@ void Window::SetVisible(bool visible) {
         SetTopMost(hwnd);
     }
 }
+void Window::UpdateGameplayVisibility(bool focused,bool menu_open,bool game_cursor_visible) {
+    if(!window)return;
+    // Native cursor menus must not have a foreign window above their mouse
+    // targets. Raw-input gameplay resumes the overlay when it hides the cursor.
+    const bool visible=focused && (menu_open || !game_cursor_visible);
+    if(visible!=(IsWindowVisible(hwnd)!=FALSE))SetVisible(visible);
+}

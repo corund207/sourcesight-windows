@@ -189,23 +189,11 @@ bool Renderer::HandleWindowOrder() {
     if (!IsWindow(p->hwnd_))
         this->isRunning = false;
 
-    static bool overlay_visible = true;
     auto foreground = GetForegroundWindow();
     this->isFocused = (foreground == Window::hwnd || foreground == p->hwnd_);
-
-    if (!this->isFocused && overlay_visible) {
-        LOGF(VERBOSE, "Hiding overlay window because the game is not focused");
-        Window::SetVisible(false);
-        overlay_visible = false;
-        return true;
-    }
-
-    if (!overlay_visible && this->isFocused) {
-        LOGF(VERBOSE, "Showing overlay window as the game is focused");
-        Window::SetVisible(true);
-        overlay_visible = true;
-        return true;
-    }
+    CURSORINFO cursor{sizeof(cursor)};
+    const bool game_cursor_visible=GetCursorInfo(&cursor) && (cursor.flags&CURSOR_SHOWING);
+    Window::UpdateGameplayVisibility(isFocused.load(),isOpen.load(),game_cursor_visible);
 
     static RECT last_rect = { 0, 0, 0, 0 };
 

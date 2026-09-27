@@ -54,6 +54,9 @@ only appear while the menu is open; no startup help panel covers the game.
 the active profile and exits. Closing the menu also saves the profile.
 With the menu closed, mouse input passes through to the game and the overlay
 does not take keyboard focus when it reappears after switching applications.
+While CS2 shows its mouse cursor (buy menu, settings and other game menus),
+ESP temporarily hides so those menus remain clickable. It returns when gameplay
+captures the cursor. SourceSight's own menu stays visible when opened with Insert.
 Profiles are stored under `configs/` in the working directory. Writes use
 flushed temporary files and Windows atomic replacement with a `.json.bak`
 backup. Linux visual profiles can be imported; automation sections are stripped.
