@@ -1,7 +1,7 @@
 // Generates the Windows-only read layout from a pinned a2x/cs2-dumper snapshot.
 // Run: node tools/update-offsets.mjs [40-character commit SHA]
 import fs from 'node:fs/promises';
-const revision=process.argv[2]??'c46bfec6ac83b34fea4ce85383d9f0d555e96b38';
+const revision=process.argv[2]??'e5ab60eebd30d9b45692c8ad3daf72c358df46b7';
 if(!/^[a-f0-9]{40}$/.test(revision))throw new Error('Supply a full commit SHA.');
 const base=`https://raw.githubusercontent.com/a2x/cs2-dumper/${revision}/output/`;
 const [schema,modules,info]=await Promise.all(['client_dll.json','offsets.json','info.json'].map(async file=>{

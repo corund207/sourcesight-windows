@@ -2,11 +2,11 @@
 #include <cstddef>
 #include <cstdint>
 
-// Windows snapshot: a2x/cs2-dumper c46bfec6ac83b34fea4ce85383d9f0d555e96b38
-// Generated 2026-09-25T21:58:33.291203900+00:00; rerun tools/update-offsets.mjs after game updates.
+// Windows snapshot: a2x/cs2-dumper e5ab60eebd30d9b45692c8ad3daf72c358df46b7
+// Generated 2026-09-29T08:54:33.699279+00:00; rerun tools/update-offsets.mjs after game updates.
 namespace offsets {
-    inline constexpr int supportedBuild=14185;
-    inline constexpr std::uintptr_t entityList=0x27151A8;
+    inline constexpr int supportedBuild=14186;
+    inline constexpr std::uintptr_t entityList=0x27151E8;
     inline constexpr std::uintptr_t viewMatrix=0x2565A20;
     inline constexpr std::uintptr_t localPlayerController=0x2537628;
     inline constexpr std::uintptr_t globalVars=0x222BF88;

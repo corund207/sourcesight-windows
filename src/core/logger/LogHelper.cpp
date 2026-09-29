@@ -42,6 +42,7 @@ bool LogHelper::InitImpl() {
     }
 
     m_ConsoleOut.open("CONOUT$", std::ios_base::out | std::ios_base::app);
+    m_FileOut.open("sourcesight.log", std::ios_base::out | std::ios_base::trunc);
 
     Logger::AddSink([this](LogMessagePtr msg) {
 #ifndef _DEBUG
@@ -52,6 +53,18 @@ bool LogHelper::InitImpl() {
 
         m_ConsoleOut << formatted;
         m_ConsoleOut.flush();
+
+        if (m_FileOut.is_open()) {
+            // strip ANSI color codes for the log file
+            for (size_t i = 0; i < formatted.size(); ++i) {
+                if (formatted[i] == '\x1b') {
+                    while (i < formatted.size() && formatted[i] != 'm') ++i;
+                    continue;
+                }
+                m_FileOut.put(formatted[i]);
+            }
+            m_FileOut.flush();
+        }
     });
 
     return true;

@@ -50,4 +50,5 @@ private:
     std::string FormatConsole(const LogMessagePtr msg);
 private:
 	std::ofstream m_ConsoleOut;
+	std::ofstream m_FileOut;
 };
