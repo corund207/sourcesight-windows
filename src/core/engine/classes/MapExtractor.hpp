@@ -32,6 +32,7 @@ std::optional<std::string> GetMapTriPath(const std::string& map_name, const std:
 // Auto-extract on map change if missing (call from Cache/Engine when map changes)
 // Returns true if map is ready for raycasting
 bool EnsureMapLoaded(const std::string& map_name);
+std::string StatusText();
 
 // Find CS2 installation directory automatically
 std::optional<std::string> FindCS2InstallPath();

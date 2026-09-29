@@ -24,24 +24,6 @@ bool nearColor(COLORREF actual,COLORREF expected) {
            std::abs(int(GetGValue(actual))-int(GetGValue(expected)))<=3 &&
            std::abs(int(GetBValue(actual))-int(GetBValue(expected)))<=3;
 }
-HWND systemHitTest(POINT pt) {
-    // Mimic Win32 mouse routing: walk top-level windows in Z-order and query
-    // WM_NCHITTEST until one does not return HTTRANSPARENT. Hidden/disabled
-    // windows are skipped. Direct SendMessage to the overlay alone cannot
-    // prove the OS skips it; this chain can.
-    const LPARAM param=MAKELPARAM(pt.x,pt.y);
-    for(HWND candidate=GetTopWindow(nullptr);candidate;candidate=GetWindow(candidate,GW_HWNDNEXT)) {
-        if(!IsWindowVisible(candidate) || !IsWindowEnabled(candidate))continue;
-        // Skip our own fixture lookup scope to top-level only.
-        if(GetParent(candidate)!=nullptr)continue;
-        const LRESULT hit=SendMessageW(candidate,WM_NCHITTEST,0,param);
-        if(hit==HTTRANSPARENT || hit==HTNOWHERE)continue;
-        RECT area{};
-        if(!GetWindowRect(candidate,&area) || !PtInRect(&area,pt))continue;
-        return candidate;
-    }
-    return nullptr;
-}
 void checkVisibilityUnit() {
     // The live flicker was a sensor-actuator loop: GetCursorInfo observes the
     // overlay itself, so hiding on "cursor visible" toggled the next snapshot.
@@ -89,11 +71,20 @@ int main() {
         WNDCLASSW cls{};cls.lpfnWndProc=DefWindowProcW;cls.hInstance=GetModuleHandleW(nullptr);
         cls.hbrBackground=brush;cls.lpszClassName=L"SourceSightCompositionFixture";
         require(RegisterClassW(&cls)!=0,"register background fixture");
-        background=CreateWindowExW(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,cls.lpszClassName,L"Overlay transparency test",
+        background=CreateWindowExW(WS_EX_TOPMOST,cls.lpszClassName,L"Overlay transparency test",
             WS_POPUP,rect.left,rect.top,rect.right-rect.left,rect.bottom-rect.top,
             nullptr,nullptr,cls.hInstance,nullptr);
         require(background!=nullptr,"create background fixture");
-        ShowWindow(background,SW_SHOWNOACTIVATE);UpdateWindow(background);DwmFlush();Sleep(200);
+        ShowWindow(background,SW_SHOWNOACTIVATE);UpdateWindow(background);
+        SetForegroundWindow(background);
+        // Establish the fixture before judging overlay pixels. Another game's
+        // exclusive presentation can cover a no-activate test window entirely.
+        const auto fixture_deadline=GetTickCount64()+30000;
+        while(!nearColor(desktopPixel(rect.left+120,rect.top+120),background_color) && GetTickCount64()<fixture_deadline) {
+            MSG message{};
+            while(PeekMessageW(&message,nullptr,0,0,PM_REMOVE)) {TranslateMessage(&message);DispatchMessageW(&message);}
+            DwmFlush();Sleep(20);
+        }
         require(nearColor(desktopPixel(rect.left+120,rect.top+120),background_color),"fixture visible before overlay");
         require(Window::SpawnWindow(),"create native overlay");
         require(Window::CreateDevice(),"initialize OpenGL");
@@ -101,13 +92,7 @@ int main() {
         Window::SetBounds(rect);
         for(bool passthrough:{true,false,true,false,true}) {
             Window::SetClickthrough(Window::hwnd,passthrough);
-            // Native styles genuinely support cross-process passthrough:
-            // WS_EX_LAYERED is retained, WS_EX_TRANSPARENT follows the input
-            // mode for system-wide mouse routing, and the GLFW "GLFW30"
-            // (CS_OWNDC) window subclass answers HTTRANSPARENT to WM_NCHITTEST.
-            // WindowFromPoint is thread-sensitive and cannot prove this, so
-            // input is verified via WM_NCHITTEST from both UI threads while
-            // the overlay stays visible.
+            // Check both immediately and after backend/render frames below.
             const auto exstyle=GetWindowLongPtrW(Window::hwnd,GWL_EXSTYLE);
             require((exstyle&WS_EX_LAYERED)!=0,"layered style retained for composition");
             require(((exstyle&WS_EX_TRANSPARENT)!=0)==passthrough,"transparent style follows menu input mode");
@@ -120,6 +105,8 @@ int main() {
                 draw->AddRect({40,40},{80,80},IM_COL32(230,50,20,255),0.f,0,4.f);
                 draw->AddRectFilled({160,40},{200,80},IM_COL32(230,50,20,128));
                 Window::EndRender();DwmFlush();Sleep(30);
+                require(((GetWindowLongPtrW(Window::hwnd,GWL_EXSTYLE)&WS_EX_TRANSPARENT)!=0)==passthrough,
+                        "ImGui backend must not clear passthrough during NewFrame");
             }
             const auto empty=desktopPixel(rect.left+120,rect.top+120);
             const auto drawn=desktopPixel(rect.left+40,rect.top+60);
@@ -128,17 +115,15 @@ int main() {
             require(nearColor(empty,background_color),"empty overlay pixels leave desktop visible");
             require(nearColor(desktopPixel(rect.left+60,rect.top+60),background_color),"ESP box interior stays transparent");
             require(nearColor(desktopPixel(rect.left+180,rect.top+60),RGB(134,81,100)),"translucent graphics blend with desktop");
-            // Same-thread mouse routing follows the input mode without hiding.
+            // Subclass contract only: SendMessage does not prove OS input routing.
             const POINT pt{rect.left+180,rect.top+60};
             const LPARAM hit_param=MAKELPARAM(pt.x,pt.y);
             const LRESULT hit_same=SendMessageW(Window::hwnd,WM_NCHITTEST,0,hit_param);
             require((hit_same==HTTRANSPARENT)==passthrough,"WM_NCHITTEST follows menu input mode");
-            // A game queries from a different UI thread. SendMessage still
-            // reaches the overlay WndProc on its owning thread, proving the
-            // HTTRANSPARENT answer (and WS_EX_TRANSPARENT style) work
-            // cross-thread without hiding the window.
+            // Native lookup on another thread, without a fabricated Z-order walk.
+            // Actual delivered events are checked by test-overlay-input.
             auto external_hit=std::async(std::launch::async,[&] {
-                return SendMessageW(Window::hwnd,WM_NCHITTEST,0,hit_param);
+                return WindowFromPoint(pt);
             });
             while(external_hit.wait_for(std::chrono::milliseconds(0))!=std::future_status::ready) {
                 MSG message{};
@@ -147,15 +132,10 @@ int main() {
                 }
                 Sleep(1);
             }
-            require((external_hit.get()==HTTRANSPARENT)==passthrough,
+            require(external_hit.get()==(passthrough?background:Window::hwnd),
                     "cross-thread hit testing follows menu input mode");
-            // System-level routing: the OS walks Z-order until a window stops
-            // returning HTTRANSPARENT. When passthrough, the chain must skip
-            // the visible overlay and land on the fixture below; when
-            // interactive it must stop at the overlay. This catches stale
-            // WS_EX_TRANSPARENT state (missing SWP_FRAMECHANGED) that direct
-            // SendMessage alone cannot.
-            const HWND routed=systemHitTest(pt);
+            // Also check USER32 lookup from the owning UI thread.
+            const HWND routed=WindowFromPoint(pt);
             require((routed==Window::hwnd)==!passthrough,
                     "system Z-order routing reaches game target via passthrough");
             // Oscillating cursor snapshots must not produce a hide/show cycle

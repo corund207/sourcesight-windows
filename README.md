@@ -78,8 +78,8 @@ empty game data. It does not simulate a match.
 ## Windows game layout
 
 The checked-in read layout comes from the Windows output of
-[a2x/cs2-dumper](https://github.com/a2x/cs2-dumper/tree/c46bfec6ac83b34fea4ce85383d9f0d555e96b38),
-for **CS2 build 14185**. Startup rejects a different build rather than using
+[a2x/cs2-dumper](https://github.com/a2x/cs2-dumper/tree/e5ab60eebd30d9b45692c8ad3daf72c358df46b7),
+for **CS2 build 14186**. Startup rejects a different build rather than using
 incompatible offsets. After a game update, obtain a matching Windows dump and
 regenerate the header from its full commit SHA (Node.js 20+ required):
 
@@ -96,12 +96,18 @@ other readable player data remains available. Restart after restarting CS2.
 
 ## Maps and capture
 
-Place locally obtained `maps/<map-name>.tri` beside the executable or in the
-working directory. Each triangle is nine little-endian floats (36 bytes), with
-no header. Map files are validated and loaded in the background. Compatible
-local `.vphys` files can be converted with the included `VPhysToOpt.exe`.
-Compressed game assets may need a separate extraction tool. Steam discovery
-uses the Windows registry and `libraryfolders.vdf`, including custom libraries.
+Missing map geometry is extracted in the background from the local CS2 install.
+The release includes Source 2 Viewer CLI 20.0 to decode `world_physics.vmdl_c`
+(PHYS block) or `world_physics.vphys_c` (DATA block). Both convex hulls and
+triangle meshes are converted into Source coordinates and cached beside the
+executable as `maps/<map-name>.tri`. No game files are downloaded or modified.
+For a source build, run `./scripts/setup-map-decoder.ps1` once; packaging does
+this automatically and verifies the decoder archive's pinned SHA-256.
+Existing `.tri` files in the working directory or beside the executable remain
+supported. Each triangle is nine little-endian floats (36 bytes), without a
+header. Steam discovery includes custom libraries. The Map geometry card
+reports loading and extraction errors. `build/diagnose-map.exe de_dust2 maps`
+can exercise extraction independently when run from the build directory.
 Game-derived map files are excluded from Git and packages.
 
 Screenshots use Windows GDI and save BMP files. Video recording requires

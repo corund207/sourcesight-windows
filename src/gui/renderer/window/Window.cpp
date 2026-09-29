@@ -13,6 +13,8 @@
 namespace {
 GLFWwindow* window=nullptr;
 bool first_frame=true,clickthrough=false;
+bool input_diagnostics_pending=false;
+unsigned input_transitions=0;
 WNDPROC original_proc=nullptr;
 OverlayVisibility visibility;
 LRESULT CALLBACK OverlayProc(HWND target,UINT message,WPARAM wparam,LPARAM lparam) {
@@ -28,6 +30,7 @@ bool Window::SpawnWindow() {
     if(!glfwInit())return false;
     const bool preview=Menu::IsPreviewMode();
     first_frame=true;
+    input_transitions=0;
     visibility=OverlayVisibility{};
     glfwWindowHint(GLFW_VISIBLE,GLFW_FALSE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
@@ -88,7 +91,24 @@ void Window::StartRender() {
     auto& io=ImGui::GetIO();
     if(clickthrough)io.ConfigFlags|=ImGuiConfigFlags_NoMouseCursorChange;
     else io.ConfigFlags&=~ImGuiConfigFlags_NoMouseCursorChange;
+    // The docking GLFW backend writes GLFW_MOUSE_PASSTHROUGH on EVERY
+    // NewFrame, including the main viewport with multi-viewports disabled.
+    // Supply our input policy before it runs; otherwise it clears
+    // WS_EX_TRANSPARENT immediately after SetClickthrough enabled it.
+    auto* viewport=ImGui::GetMainViewport();
+    if(clickthrough)viewport->Flags|=ImGuiViewportFlags_NoInputs;
+    else viewport->Flags&=~ImGuiViewportFlags_NoInputs;
     ImGui_ImplOpenGL3_NewFrame();ImGui_ImplGlfw_NewFrame();
+    if(input_diagnostics_pending) {
+        const auto style=GetWindowLongPtrW(hwnd,GWL_EXSTYLE);
+        LOGF(VERBOSE,"Overlay input after backend frame: passthrough={} glfw={} transparent={} noactivate={} capture={} transitions={}",
+             clickthrough,glfwGetWindowAttrib(window,GLFW_MOUSE_PASSTHROUGH),
+             (style&WS_EX_TRANSPARENT)!=0,(style&WS_EX_NOACTIVATE)!=0,
+             reinterpret_cast<std::uintptr_t>(GetCapture()),input_transitions);
+        if(((style&WS_EX_TRANSPARENT)!=0)!=clickthrough)
+            LOGF(WARNING,"Overlay input policy was overwritten during backend NewFrame");
+        input_diagnostics_pending=false;
+    }
     if(!Menu::IsPreviewMode())ImGui::GetIO().DisplaySize.x-=1.f;
     ImGui::GetIO().AddKeyEvent(ImGuiKey_F9,(GetAsyncKeyState(VK_F9)&0x8000)!=0);
     ImGui::NewFrame();
@@ -133,6 +153,8 @@ void Window::SetTopMost(HWND target,bool enabled) {
 }
 void Window::SetClickthrough(HWND target,bool enabled) {
     if(!window || target!=hwnd)return;
+    if(clickthrough!=enabled)++input_transitions;
+    input_diagnostics_pending=true;
     clickthrough=enabled;
     glfwSetWindowAttrib(window,GLFW_MOUSE_PASSTHROUGH,enabled?GLFW_TRUE:GLFW_FALSE);
     auto style=GetWindowLongPtrW(target,GWL_EXSTYLE);

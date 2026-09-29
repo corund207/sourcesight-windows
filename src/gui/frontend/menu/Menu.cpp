@@ -4,6 +4,7 @@
 #include "config/AutoCalibration.hpp"
 #include "core/engine/cache/Cache.hpp"
 #include "core/engine/classes/MapRaytrace.hpp"
+#include "core/engine/classes/MapExtractor.hpp"
 #include "core/diagnostics/Diagnostics.hpp"
 #include "gui/renderer/capture/ScreenCapture.hpp"
 #include "gui/renderer/Renderer.hpp"
@@ -717,7 +718,7 @@ void Menu::RenderImpl() {
                             ImGui::TextDisabled("%s / %zu triangles", MapRaytrace::CurrentMap().c_str(),
                                                 MapRaytrace::TriangleCount());
                         else
-                            ImGui::TextWrapped("Geometry unavailable or loading. Missing map files are retried automatically.");
+                            ImGui::TextWrapped("%s", MapExtractor::StatusText().c_str());
                         // Full-map rendering uses the depth-tested mesh pass;
                         // overlay-only distance/budget controls do not apply.
                         if (AutoCalibration::Advanced()) {

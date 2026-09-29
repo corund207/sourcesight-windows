@@ -13,10 +13,11 @@
 #include <cstdint>
 #include <unordered_map>
 
-// VisCheckCS2 parser for .vphys files
-#include "Parser.h"
-#include "OptimizedGeometry.h"
-#include "Math.hpp"
+// Source 2 collision decoding and checked triangle conversion.
+#include "PhysicsText.hpp"
+#include "PhysicsDecoder.hpp"
+#include "VpkReader.hpp"
+#include <mutex>
 
 namespace MapExtractor {
 
@@ -25,133 +26,11 @@ namespace {
     std::string g_maps_dir = "maps";
     bool g_initialized = false;
     std::vector<std::string> g_vpk_files;
+    std::mutex g_status_mutex;
+    std::string g_status="Waiting for a map.";
+    void SetStatus(std::string value) {std::lock_guard lock(g_status_mutex);g_status=std::move(value);}
 }
-
-// VPK file format structures (VPK v2)
-#pragma pack(push, 1)
-struct VPKHeader {
-    uint32_t signature;        // 0x55aa1234
-    uint32_t version;          // 2 for VPK v2
-    uint32_t tree_size;        // Size of directory tree in bytes
-    uint32_t file_data_section_size; // v2 only
-    uint32_t archive_md5_section_size; // v2 only
-    uint32_t other_md5_section_size;   // v2 only
-    uint32_t signature_section_size;   // v2 only
-};
-#pragma pack(pop)
-
-// Simple VPK extractor for specific files
-bool ExtractFileFromVPK(const std::string& vpk_path, const std::string& file_to_find, const std::string& output_path) {
-    std::ifstream vpk(vpk_path, std::ios::binary);
-    if (!vpk) {
-        LOGF(WARNING, "[vpk] Failed to open {}", vpk_path);
-        return false;
-    }
-
-    VPKHeader header;
-    vpk.read(reinterpret_cast<char*>(&header), sizeof(header));
-
-    if (header.signature != 0x55aa1234 || header.version != 2) {
-        LOGF(WARNING, "[vpk] Invalid VPK header: sig=0x{:X} ver={}", header.signature, header.version);
-        return false;
-    }
-
-    LOGF(INFO, "[vpk] Reading VPK: tree_size={} bytes", header.tree_size);
-
-    // Read directory tree
-    std::vector<char> tree_data(header.tree_size);
-    vpk.read(tree_data.data(), header.tree_size);
-
-    // Parse directory tree to find our file
-    size_t pos = 0;
-    int file_count = 0;
-    while (pos < tree_data.size()) {
-        // Read extension
-        std::string ext(&tree_data[pos]);
-        pos += ext.size() + 1;
-        if (ext.empty()) break; // End of tree
-
-        while (pos < tree_data.size()) {
-            // Read path
-            std::string path(&tree_data[pos]);
-            pos += path.size() + 1;
-            if (path.empty()) break; // Next extension
-
-            while (pos < tree_data.size()) {
-                // Read filename
-                std::string filename(&tree_data[pos]);
-                pos += filename.size() + 1;
-                if (filename.empty()) break; // Next path
-
-                // Read file entry metadata
-                if (pos + 20 > tree_data.size()) return false;
-
-                uint32_t crc32 = *reinterpret_cast<uint32_t*>(&tree_data[pos]); pos += 4;
-                uint16_t preload_bytes = *reinterpret_cast<uint16_t*>(&tree_data[pos]); pos += 2;
-                uint16_t archive_index = *reinterpret_cast<uint16_t*>(&tree_data[pos]); pos += 2;
-                uint32_t entry_offset = *reinterpret_cast<uint32_t*>(&tree_data[pos]); pos += 4;
-                uint32_t entry_length = *reinterpret_cast<uint32_t*>(&tree_data[pos]); pos += 4;
-                uint16_t terminator = *reinterpret_cast<uint16_t*>(&tree_data[pos]); pos += 2;
-
-                file_count++;
-
-                // Check if this is our file
-                std::string full_path = path + "/" + filename + "." + ext;
-                if (full_path == file_to_find || filename + "." + ext == file_to_find) {
-                    LOGF(INFO, "[vpk] Found file: {} (archive_idx={}, offset={}, len={})",
-                         full_path, archive_index, entry_offset, entry_length);
-
-                    // Found it! Read the file data
-                    size_t data_start = sizeof(VPKHeader) + header.tree_size + entry_offset;
-                    vpk.seekg(data_start);
-
-                    std::vector<char> file_data(entry_length);
-                    vpk.read(file_data.data(), entry_length);
-
-                    if (vpk.gcount() == static_cast<std::streamsize>(entry_length)) {
-                        std::ofstream out(output_path, std::ios::binary);
-                        out.write(file_data.data(), entry_length);
-                        LOGF(INFO, "[vpk] Successfully extracted to {}", output_path);
-                        return true;
-                    }
-
-                    LOGF(WARNING, "[vpk] Failed to read full file data (got {} of {} bytes)", vpk.gcount(), entry_length);
-
-                    // If not found in this VPK, try chunk files
-                    if (archive_index != 0x7FFF) {
-                        std::string chunk_path = vpk_path;
-                        size_t dot_pos = chunk_path.rfind(".vpk");
-                        if (dot_pos != std::string::npos) {
-                            chunk_path = chunk_path.substr(0, dot_pos) + "_" +
-                                std::to_string(archive_index).substr(0, 3) + ".vpk";
-                        }
-
-                        LOGF(INFO, "[vpk] Trying chunk file: {}", chunk_path);
-                        std::ifstream chunk_vpk(chunk_path, std::ios::binary);
-                        if (chunk_vpk) {
-                            chunk_vpk.seekg(entry_offset);
-                            std::vector<char> chunk_data(entry_length);
-                            chunk_vpk.read(chunk_data.data(), entry_length);
-                            if (chunk_vpk.gcount() == static_cast<std::streamsize>(entry_length)) {
-                                std::ofstream out(output_path, std::ios::binary);
-                                out.write(chunk_data.data(), entry_length);
-                                LOGF(INFO, "[vpk] Successfully extracted from chunk: {}", output_path);
-                                return true;
-                            }
-                        }
-                    }
-                }
-
-                // Skip preload data if any
-                if (preload_bytes > 0) {
-                    pos += preload_bytes;
-                }
-            }
-        }
-    }
-    LOGF(INFO, "[vpk] File '{}' not found in VPK (searched {} files)", file_to_find, file_count);
-    return false;
-}
+std::string StatusText() {std::lock_guard lock(g_status_mutex);return g_status;}
 
 bool Init() {
     if (g_initialized)
@@ -257,139 +136,61 @@ std::optional<std::string> GetMapTriPath(const std::string& map_name, const std:
 
 ExtractResult ExtractMap(const std::string& map_name, const std::string& output_dir) {
     ExtractResult result;
-
-    if (!g_initialized)
-        Init();
-
-    // Check if already extracted
-    if (HasMapData(map_name, output_dir)) {
-        result.success = true;
-        result.tri_path = output_dir + "/" + map_name + ".tri";
-        return result;
+    if(map_name.empty() || map_name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")!=std::string::npos) {
+        result.error="Invalid map name";return result;
     }
-
-    // Try to find and extract world_physics.vphys from VPK
-    // Look for map VPK files (de_dust2.vpk, pak01_dir.vpk, etc.)
-    std::string vphys_path;
-    std::string vphys_filename = "maps/" + map_name + "/world_physics.vphys";
-
-    // Priority 1: Check map-specific VPK (de_dust2.vpk)
-    for (const auto& vpk_file : g_vpk_files) {
-        std::string vpk_name = std::filesystem::path(vpk_file).stem().string();
-        if (vpk_name == map_name) {
-            LOGF(INFO, "[map_extractor] Trying to extract {} from {}", vphys_filename, vpk_file);
-            if (ExtractFileFromVPK(vpk_file, vphys_filename, output_dir + "/" + map_name + ".vphys")) {
-                vphys_path = output_dir + "/" + map_name + ".vphys";
-                LOGF(INFO, "[map_extractor] Successfully extracted .vphys from {}", vpk_file);
-                break;
+    try {
+        const auto directory=std::filesystem::absolute(output_dir);
+        std::filesystem::create_directories(directory);
+        const auto tri=directory/(map_name+".tri");
+        if(std::filesystem::is_regular_file(tri)) {
+            const auto size=std::filesystem::file_size(tri);
+            if(size>0 && size%sizeof(MapRaytrace::Triangle)==0) {
+                result.success=true;result.tri_path=tri.string();return result;
             }
         }
-    }
-
-    LOGF(INFO, "[map_extractor] After priority 1, vphys_path empty: {}", vphys_path.empty());
-
-    // Priority 2: Check pak01_dir.vpk (main package)
-    if (vphys_path.empty()) {
-        LOGF(INFO, "[map_extractor] Trying pak01_dir.vpk... (total VPKs: {})", g_vpk_files.size());
-        for (const auto& vpk_file : g_vpk_files) {
-            std::string vpk_name = std::filesystem::path(vpk_file).stem().string();
-            LOGF(INFO, "[map_extractor] Checking VPK: {} (stem: {})", vpk_file, vpk_name);
-            if (vpk_name == "pak01_dir") {
-                LOGF(INFO, "[map_extractor] Trying to extract {} from {}", vphys_filename, vpk_file);
-                if (ExtractFileFromVPK(vpk_file, vphys_filename, output_dir + "/" + map_name + ".vphys")) {
-                    vphys_path = output_dir + "/" + map_name + ".vphys";
-                    LOGF(INFO, "[map_extractor] Successfully extracted .vphys from {}", vpk_file);
-                    break;
+        const auto text=directory/(map_name+".vphys");
+        auto text_input=text;
+        if(!std::filesystem::is_regular_file(text)) {
+            if(!Init())throw std::runtime_error("CS2 installation not found");
+            std::vector<std::string> candidates;
+            for(const auto& path:g_vpk_files)
+                if(std::filesystem::path(path).stem()==map_name)candidates.push_back(path);
+            for(const auto& path:g_vpk_files)
+                if(std::filesystem::path(path).stem()=="pak01_dir")candidates.push_back(path);
+            bool found=false;
+            for(const auto& archive:candidates) {
+                for(const auto* ext:{"vmdl_c","vphys_c","vphys"}) {
+                    const auto resource=directory/(map_name+"."+ext);
+                    const auto entry="maps/"+map_name+"/world_physics."+ext;
+                    if(!VpkReader::Extract(archive,entry,resource))continue;
+                    LOGF(INFO,"[map_extractor] Decoding {} from {}",entry,archive);
+                    if(std::string_view(ext)!="vphys") {
+                        const auto temporary=std::filesystem::path(text.wstring()+L".tmp");
+                        PhysicsDecoder::Decode(resource,temporary,std::string_view(ext)=="vmdl_c"?"PHYS":"DATA");
+                        // A failed/unsupported decode must not become a persistent
+                        // cache hit. Only the validated .tri is published below.
+                        text_input=temporary;
+                    }
+                    found=true;break;
                 }
+                if(found)break;
             }
+            if(!found)throw std::runtime_error("Map package has no supported world_physics collision resource");
         }
-    }
-
-    // Priority 3: Check for already extracted .vphys in maps folder
-    if (vphys_path.empty()) {
-        std::string local_vphys = output_dir + "/" + map_name + ".vphys";
-        if (std::filesystem::exists(local_vphys)) {
-            vphys_path = local_vphys;
-        }
-    }
-
-    // Priority 4: Check for .vphys in CS2 install (expanded map)
-    if (vphys_path.empty()) {
-        std::string cs2_vphys = g_cs2_install_path + "/game/csgo/maps/" + map_name + "/world_physics.vphys";
-        if (std::filesystem::exists(cs2_vphys)) {
-            vphys_path = cs2_vphys;
-        }
-    }
-
-    // Priority 5: Check for .vphys_c (compressed) - needs decompression via Source 2 Viewer
-    if (vphys_path.empty()) {
-        std::string cs2_vphys_c = g_cs2_install_path + "/game/csgo/maps/" + map_name + "/world_physics.vphys_c";
-        if (std::filesystem::exists(cs2_vphys_c)) {
-            LOGF(INFO, "[map_extractor] Found compressed .vphys_c for {}", map_name);
-            result.success = false;
-            result.error = "Found compressed .vphys_c - use Source 2 Viewer (ValveResourceFormat) to extract: "
-                           "Open pak01_dir.vpk in Source 2 Viewer, find maps/" + map_name + "/world_physics.vphys_c, "
-                           "extract and decompress to .vphys, then convert to .tri with VPhysToOpt.";
-            return result;
-        }
-    }
-
-    if (!vphys_path.empty()) {
-        LOGF(INFO, "[map_extractor] Parsing .vphys for {}: {}", map_name, vphys_path);
-
-        try {
-            // Use VisCheckCS2 parser to parse .vphys
-            Parser parser(vphys_path);
-            auto combined = parser.GetCombinedList();
-
-            // Save as .tri format (compatible with MapRaytrace - just array of Triangle {Vec3 p1,p2,p3})
-            std::string tri_path = output_dir + "/" + map_name + ".tri";
-            const std::string temporary_path = tri_path + ".tmp";
-            std::ofstream out(temporary_path, std::ios::binary);
-            if (!out) {
-                result.success = false;
-                result.error = "Failed to open output .tri file";
-                return result;
-            }
-
-            // MapRaytrace expects: array of Triangle { Vec3 p1, p2, p3 } (36 bytes each)
-            // No header, just raw triangles
-            size_t total_tris = 0;
-            for (const auto& mesh : combined) {
-                total_tris += mesh.size();
-            }
-
-            static_assert(sizeof(TriangleCombined) == 36);
-            for (const auto& mesh : combined)
-                out.write(reinterpret_cast<const char*>(mesh.data()), mesh.size() * sizeof(TriangleCombined));
-            out.close();
-            if (!out || total_tris == 0) {
-                result.error = "Empty geometry or incomplete mesh write";
-                return result;
-            }
-            // Readers see only a complete mesh; a failed write leaves a .tmp
-            // diagnostic file rather than poisoning the persistent map cache.
-            std::error_code rename_error;
-            FileIO::Replace(temporary_path,tri_path,rename_error);
-            if(rename_error)throw std::system_error(rename_error);
-
-            LOGF(INFO, "[map_extractor] Saved {} triangles to {}", total_tris, tri_path);
-            result.success = true;
-            result.tri_path = tri_path;
-            return result;
-        }
-        catch (const std::exception& e) {
-            result.success = false;
-            result.error = std::string("Parser error: ") + e.what();
-            return result;
-        }
-    }
-
-    result.success = false;
-    result.error = "No .vphys file found for map. Extract using Source 2 Viewer or cs2-phys-extractor.";
+        std::ifstream input(text_input,std::ios::binary);
+        const auto triangles=PhysicsText::Read(input);
+        const auto temporary=std::filesystem::path(tri.wstring()+L".tmp");
+        std::ofstream output(temporary,std::ios::binary|std::ios::trunc);
+        output.write(reinterpret_cast<const char*>(triangles.data()),triangles.size()*sizeof(MapRaytrace::Triangle));
+        output.close();if(!output)throw std::runtime_error("Cannot write extracted map triangles");
+        std::error_code error;FileIO::Replace(temporary,tri,error);
+        if(error)throw std::system_error(error);
+        LOGF(INFO,"[map_extractor] Saved {} world triangles to {}",triangles.size(),tri.string());
+        result.success=true;result.tri_path=tri.string();
+    } catch(const std::exception& error) {result.error=error.what();}
     return result;
 }
-
 bool EnsureMapLoaded(const std::string& map_name) {
     if (map_name.empty())
         return false;
@@ -402,13 +203,19 @@ bool EnsureMapLoaded(const std::string& map_name) {
     if (MapRaytrace::LoadMap(map_name))
         return true;
 
-    // Try to extract
-    auto result = ExtractMap(map_name);
+    SetStatus("Loading collision geometry for "+map_name+"...");
+    // New caches live beside the executable, regardless of the launcher's CWD.
+    wchar_t executable[32768]{};
+    const auto length=GetModuleFileNameW(nullptr,executable,std::size(executable));
+    const auto directory=length && length<std::size(executable)
+        ? std::filesystem::path(executable).parent_path()/"maps" : std::filesystem::path("maps");
+    auto result = ExtractMap(map_name,directory.string());
     if (result.success) {
         return MapRaytrace::LoadMap(map_name);
     }
 
     LOGF(WARNING, "[map_extractor] No collision data for map '{}': {}", map_name, result.error);
+    SetStatus(map_name+": "+result.error);
     return false;
 }
 

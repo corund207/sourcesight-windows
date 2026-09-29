@@ -5,6 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $buildRoot = (Resolve-Path (Join-Path $repoRoot $BuildDir)).Path
+& (Join-Path $PSScriptRoot 'setup-map-decoder.ps1') -BuildDir $BuildDir
 $distRoot = Join-Path $repoRoot 'dist'
 $stageRoot = Join-Path $distRoot 'sourcesight-windows'
 if (Test-Path -LiteralPath $stageRoot) {
@@ -17,6 +18,8 @@ if (Test-Path -LiteralPath $stageRoot) {
 New-Item -ItemType Directory -Force $stageRoot | Out-Null
 & cmake --install $buildRoot --config $Configuration --prefix $stageRoot
 if ($LASTEXITCODE -ne 0) { throw 'CMake installation failed.' }
+New-Item -ItemType Directory -Force (Join-Path $stageRoot 'tools') | Out-Null
+Copy-Item -LiteralPath (Join-Path $buildRoot 'tools/source2viewer') -Destination (Join-Path $stageRoot 'tools/source2viewer') -Recurse
 $licenseRoot = Join-Path $stageRoot 'licenses'
 New-Item -ItemType Directory -Force $licenseRoot | Out-Null
 $licenses = @{

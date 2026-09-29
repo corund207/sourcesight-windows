@@ -11,6 +11,7 @@ It does not replace these components' licenses or copyright notices.
 | VisCheckCS2 (Read1dno/BLOOM) | MIT — src/external/VisCheckCS2/LICENSE |
 | GLFW | zlib/libpng — src/external/glfw/LICENSE.md |
 | GLEW | BSD/MIT — fetched glew-src/LICENSE.txt (included in binary packages) |
+| Source 2 Viewer CLI 20.0 | ValveResourceFormat contributors, MIT — licenses/ValveResourceFormat.txt; https://github.com/ValveResourceFormat/ValveResourceFormat/releases/tag/20.0 |
 | Windows offset data | a2x/cs2-dumper — MIT; snapshot and source link in src/core/offsets/Offsets.hpp and README.md |
 | Interface icon font | Existing Scarlab attribution, MIT — assets/README.md |
 

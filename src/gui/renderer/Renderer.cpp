@@ -14,6 +14,20 @@
 #include <ctime>
 
 namespace {
+void RequestForeground(HWND target,const char* reason) {
+    const bool requested=SetForegroundWindow(target)!=FALSE;
+    const auto actual=GetForegroundWindow();
+    if(!requested || actual!=target)
+        LOGF(WARNING,"Foreground request failed ({}): target={} actual={} accepted={}",reason,
+             reinterpret_cast<std::uintptr_t>(target),reinterpret_cast<std::uintptr_t>(actual),requested);
+    // Read-only diagnostics; neither clipping nor cursor visibility drives ESP.
+    RECT clip{};const bool clipped=GetClipCursor(&clip)!=FALSE;
+    GUITHREADINFO thread{};thread.cbSize=sizeof(thread);
+    const bool thread_ok=GetGUIThreadInfo(GetWindowThreadProcessId(target,nullptr),&thread)!=FALSE;
+    LOGF(VERBOSE,"Input handoff ({}): clip_valid={} clip={},{},{},{} target_thread_valid={} capture={}",reason,
+         clipped,clip.left,clip.top,clip.right,clip.bottom,thread_ok,
+         reinterpret_cast<std::uintptr_t>(thread.hwndCapture));
+}
 std::optional<double> RenderCpuTimeMs() {
     FILETIME creation{}, exit{}, kernel{}, user{};
     if (GetThreadTimes(GetCurrentThread(),&creation,&exit,&kernel,&user)) {
@@ -74,7 +88,7 @@ bool Renderer::InitImpl() {
     }
 
     // Focus the game
-    if (auto process=Engine::GetProcess()) SetForegroundWindow(process->hwnd_);
+    if (auto process=Engine::GetProcess()) RequestForeground(process->hwnd_,"renderer init");
 
     if (cfg::settings::streamproof && !Menu::IsPreviewMode())
         Window::SetAffinity(Window::hwnd, WindowAffinity::Invisible);
@@ -160,9 +174,9 @@ bool Renderer::HandleState() {
         // Release cursor when opening the menu
         // Sometimes flashes the render as its handling the window order
         if (this->isOpen)
-            SetForegroundWindow(Window::hwnd);
+            RequestForeground(Window::hwnd,"open menu");
         else
-            if (auto process=Engine::GetProcess()) SetForegroundWindow(process->hwnd_);
+            if (auto process=Engine::GetProcess()) RequestForeground(process->hwnd_,"close menu");
 
         LOGF(VERBOSE, "Toggling menu state to {}", this->isOpen.load());
 
