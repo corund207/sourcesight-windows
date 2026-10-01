@@ -59,6 +59,25 @@ void Esp::RenderImpl() {
 	auto snapshot = Cache::CopySnapshot();
 	if (!snapshot.status.ready()) {
 		bullet_trails.Clear();
+		static auto last_warn = std::chrono::steady_clock::now() - std::chrono::seconds(10);
+		const auto now_warn = std::chrono::steady_clock::now();
+		if (now_warn - last_warn > std::chrono::seconds(5)) {
+			last_warn = now_warn;
+			const char* state = "unknown";
+			switch (snapshot.status.state) {
+				case CacheStatus::Unavailable: state = "unavailable"; break;
+				case CacheStatus::Refreshing: state = "refreshing"; break;
+				case CacheStatus::Ready: state = "ready"; break;
+				case CacheStatus::ProcessUnavailable: state = "process-unavailable"; break;
+				case CacheStatus::GameReadFailed: state = "game-read-failed"; break;
+				case CacheStatus::EntityListUnavailable: state = "entity-list-unavailable"; break;
+				case CacheStatus::GlobalsReadFailed: state = "globals-failed"; break;
+				case CacheStatus::NoMatch: state = "no-match"; break;
+				case CacheStatus::MissingLocal: state = "missing-local"; break;
+			}
+			LOGF(WARNING, "[esp] snapshot not ready: state={} age={}ms gen={}",
+				state, snapshot.status.age.count(), snapshot.status.generation);
+		}
 		return;
 	}
 	auto& game = snapshot.game;

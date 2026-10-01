@@ -1,6 +1,7 @@
 #include "common.hpp"
 #include "core/memory/Memory.hpp"
 #include "core/offsets/Offsets.hpp"
+#include "core/offsets/PatternScanner.hpp"
 #include "core/engine/classes/MapExtractor.hpp"
 #include "core/engine/classes/MapRaytrace.hpp"
 #include "gui/renderer/FullMapRenderer.hpp"
@@ -13,7 +14,33 @@ int main(int argc,char** argv) {
     pProcess process;
     if(process.AttachProcess("cs2.exe")) {
         const auto client=process.GetModule("client.dll"),engine=process.GetModule("engine2.dll");
-        std::cout<<"build="<<process.read<int>(engine.base+offsets::buildNumber)<<std::endl;
+        std::cout<<"client=0x"<<std::hex<<client.base<<" size=0x"<<client.size
+                 <<" engine=0x"<<engine.base<<" size=0x"<<engine.size<<std::dec<<std::endl;
+        std::cout<<"compiled build="<<process.read<int>(engine.base+offsets::buildNumber)<<std::endl;
+        PatternScanner::Resolved scanned;
+        if (PatternScanner::TryResolve(process, client, engine, scanned) && scanned.ok) {
+            std::cout<<"scanned build="<<scanned.build
+                     <<" entity=0x"<<std::hex<<scanned.entityList
+                     <<" matrix=0x"<<scanned.viewMatrix
+                     <<" lpc=0x"<<scanned.localPlayerController
+                     <<" globals=0x"<<scanned.globalVars
+                     <<" planted=0x"<<scanned.plantedC4
+                     <<" weapon=0x"<<scanned.weaponC4
+                     <<" buildOff=0x"<<scanned.buildNumber
+                     <<" net=0x"<<scanned.networkClient<<std::dec<<std::endl;
+            const auto el=process.read<std::uintptr_t>(client.base+scanned.entityList);
+            const auto le=el?process.read<std::uintptr_t>(el+0x10):0;
+            float vm[16]{}; process.read_raw(client.base+scanned.viewMatrix,vm,sizeof(vm));
+            const auto gv=process.read<std::uintptr_t>(client.base+scanned.globalVars);
+            const auto net=process.read<std::uintptr_t>(engine.base+scanned.networkClient);
+            int maxc=-1; if(net) process.read_raw(net+0x240,&maxc,sizeof(maxc));
+            std::cout<<"el=0x"<<std::hex<<el<<" le=0x"<<le
+                     <<" vm33="<<std::dec<<vm[15]
+                     <<" globals=0x"<<std::hex<<gv
+                     <<" net=0x"<<net<<std::dec<<" max_clients="<<maxc<<std::endl;
+        } else {
+            std::cout<<"pattern scan found no complete layout"<<std::endl;
+        }
         const auto globals=process.read<uintptr_t>(client.base+offsets::globalVars);
         // Read only the documented map pointer and neighboring global fields
         // for diagnosing layout drift. Never scan unrelated process memory.

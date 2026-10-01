@@ -1,8 +1,10 @@
 #include "Cache.hpp"
 
 #include "core/engine/Engine.hpp" // Circular dep
+#include "core/engine/classes/Game.hpp"
 #include "core/engine/classes/MapExtractor.hpp"
 #include "core/engine/classes/MapRaytrace.hpp"
+#include "core/offsets/Dumper.hpp"
 
 #include <cstring>
 #include <future>
@@ -158,6 +160,12 @@ bool Cache::RefreshImpl() {
     Globals next_globals;
     if (!next_globals.Update() || next_globals.max_clients < 0 || next_globals.max_clients > 64) {
         PublishFailure(CacheStatus::GlobalsReadFailed, now);
+        static auto last_warn = steady_clock::now() - 10s;
+        if (now - last_warn > 2s) {
+            last_warn = now;
+            LOGF(WARNING, "[cache] globals failed: max_clients={} map='{}' in_match={}",
+                 next_globals.max_clients, next_globals.map_name, next_globals.in_match);
+        }
         return false;
     }
 
@@ -200,6 +208,29 @@ bool Cache::RefreshImpl() {
         if (player.localplayer) next_local = player;
         scan.push_back(std::move(player));
     }
+    if (scan.empty() && next_globals.in_match) {
+        // One deep sample so an empty match is diagnosable from one run:
+        // controller ptr, pawn handle, pawn ptr, health and origin for slot 0/1.
+        static auto last_empty = steady_clock::now() - 10s;
+        if (now - last_empty > 5s) {
+            last_empty = now;
+            auto proc = Engine::GetProcess();
+            for (int s = 0; s < 2; ++s) {
+                const auto ctrl = proc->read<std::uintptr_t>(
+                    next_game.list_entry + (s + 1) * offsets::entity::stride);
+                const std::uint32_t handle = ctrl
+                    ? proc->read<std::uint32_t>(ctrl + offsets::controller::m_hPawn) : 0;
+                const auto pawn = handle
+                    ? Game::ResolveHandle(next_game.entity_list, handle) : 0;
+                const int hp = pawn ? proc->read<int>(pawn + offsets::pawn::m_iHealth) : -1;
+                const auto pos = pawn
+                    ? proc->read<Vec3_t>(pawn + offsets::pawn::m_vOldOrigin) : Vec3_t{};
+                LOGF(WARNING, "[cache] empty sample slot={} ctrl=0x{:X} handle=0x{:X} pawn=0x{:X} hp={} pos=({},{},{}) el=0x{:X} le=0x{:X}",
+                     s, ctrl, handle, pawn, hp, pos.x, pos.y, pos.z,
+                     next_game.entity_list, next_game.list_entry);
+            }
+        }
+    }
 
     // A missing local is a fresh absence, not a failed cache: spectating and
     // transitions may legitimately have no local pawn. Publishing the clean
@@ -208,6 +239,26 @@ bool Cache::RefreshImpl() {
     last = now;
     const CacheStatus state = !next_globals.in_match ? CacheStatus::NoMatch
         : next_local.localplayer ? CacheStatus::Ready : CacheStatus::MissingLocal;
+    {
+        // Throttled success line: capture counts BEFORE the move below.
+        // (Logging scan after std::move would always show 0.)
+        int alive = 0, enemies = 0;
+        for (const auto& p : scan) {
+            if (p.alive) ++alive;
+            if (p.alive && !p.localplayer && p.team != next_local.team) ++enemies;
+        }
+        static auto last_ok = steady_clock::now() - 10s;
+        static std::size_t last_count = static_cast<std::size_t>(-1);
+        if (now - last_ok > 5s || scan.size() != last_count) {
+            last_ok = now; last_count = scan.size();
+            LOGF(INFO, "[cache] state={} players={} alive={} enemies={} local={} hp={} team={} map='{}' max_clients={} vm33={}",
+                 state == CacheStatus::Ready ? "ready" : state == CacheStatus::MissingLocal ? "missing-local" : "no-match",
+                 scan.size(), alive, enemies, next_local.localplayer,
+                 next_local.health, static_cast<int>(next_local.team),
+                 next_globals.map_name, next_globals.max_clients,
+                 next_game.view_matrix[3][3]);
+        }
+    }
     Publish(std::move(next_game), std::move(next_bomb), std::move(next_local),
             std::move(next_globals), std::move(scan), state, now, duration);
     return Status().ready();

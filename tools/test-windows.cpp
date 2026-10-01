@@ -2,6 +2,7 @@
 #include "common.hpp"
 #include "core/memory/Memory.hpp"
 #include "core/platform/FileIO.hpp"
+#include "core/offsets/PatternScanner.hpp"
 #include "config/Config.hpp"
 #include "gui/renderer/window/OverlayVisibility.hpp"
 #include <stdexcept>
@@ -32,6 +33,35 @@ static void checkOverlayVisibilityStable() {
 int RunChecks() {
     LogHelper::Init();
     checkOverlayVisibilityStable();
+    // Pattern scanner unit checks (offline, synthetic image).
+    {
+        // Build a fake executable section with a dwEntityList-style instruction:
+        // 48 89 0D <disp32> at offset 0x20, section VA 0x1000, target 0x27151E8.
+        std::vector<std::uint8_t> section(0x200, 0xCC);
+        const std::size_t match = 0x20;
+        const std::uintptr_t section_va = 0x1000;
+        const std::uintptr_t want_target = 0x27151E8;
+        section[match+0] = 0x48; section[match+1] = 0x89; section[match+2] = 0x0D;
+        const std::int32_t disp = static_cast<std::int32_t>(
+            want_target - (section_va + match + 7));
+        std::memcpy(section.data()+match+3, &disp, sizeof(disp));
+        PatternScanner::Pattern pat = {0x48,0x89,0x0D,-1,-1,-1,-1};
+        std::size_t found = 0;
+        require(PatternScanner::FindPattern(section.data(), section.size(), pat, found),
+                "synthetic pattern is found");
+        require(found == match, "synthetic pattern offset matches");
+        std::uintptr_t resolved = 0;
+        require(PatternScanner::ResolveRip(section.data(), section.size(), found, 3, 7,
+                                           section_va, resolved),
+                "synthetic RIP resolves");
+        require(resolved == want_target, "synthetic RIP target matches");
+        // Wildcard miss and truncated disp must fail safely.
+        PatternScanner::Pattern miss = {0x48,0x89,0x0E,-1,-1,-1,-1};
+        require(!PatternScanner::FindPattern(section.data(), section.size(), miss, found),
+                "wrong opcode does not match");
+        require(!PatternScanner::ResolveRip(section.data(), 4, 0, 3, 7, section_va, resolved),
+                "truncated section fails resolve");
+    }
     const std::filesystem::path unicode_path(L"unicode-\u03A9.txt");
     std::filesystem::remove(unicode_path);
     std::filesystem::remove("replacement.txt");

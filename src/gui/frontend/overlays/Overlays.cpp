@@ -6,6 +6,7 @@
 #include "gui/frontend/menu/Theme.hpp"
 #include "assets/fonts/WeaponIcons.h"
 #include "core/engine/classes/MapRaytrace.hpp"
+#include "core/engine/classes/RadarConvars.hpp"
 
 bool Overlays::Init() {
     return GetInstance().InitImpl();
@@ -400,12 +401,18 @@ void Overlays::RenderRadar() {
     const bool minimap = cfg::world::radar::minimap;
     const float resolution_scale = radar::ResolutionScale(minimap,
         ImGui::GetIO().DisplaySize.y, cfg::world::radar::calibration_height);
-    const float scale = resolution_scale * radar::HudScale(minimap, cfg::world::radar::hud_scale,
+    // With "Apply CS2 zoom" on, follow the game's own radar convars when they
+    // could be read; otherwise use the manual sliders.
+    const auto live = RadarConvars::Get();
+    const bool follow_game = minimap && cfg::world::radar::auto_sync;
+    const float zoom = follow_game && live.radar_scale > 0.f ? live.radar_scale : cfg::world::radar::zoom;
+    const float hud_scale = follow_game && live.hud_radar_scale > 0.f ? live.hud_radar_scale : cfg::world::radar::hud_scale;
+    const float scale = resolution_scale * radar::HudScale(minimap, hud_scale,
                                         cfg::world::radar::hud_size);
     // Collision bounds include skyboxes and outlying geometry. They do not
     // describe the radar overview and must never determine marker scale.
     const float range = radar::WorldRadius(cfg::world::radar::range,
-        minimap && cfg::world::radar::auto_sync, cfg::world::radar::zoom,
+        follow_game, zoom,
         cfg::world::radar::scale_correction);
     ImVec2 draw_pos = (pos + cfg::world::radar::offset) * resolution_scale;
     ImVec2 draw_size(radar::Positive(size.x, 200.f) * scale,

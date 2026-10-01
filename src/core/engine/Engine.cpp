@@ -4,6 +4,7 @@
 #include "core/engine/cache/Cache.hpp"
 #include "core/engine/classes/MapRaytrace.hpp"
 #include "core/engine/classes/MapExtractor.hpp"
+#include "core/engine/classes/RadarConvars.hpp"
 
 bool Engine::Init() {
     return GetInstance().InitImpl();
@@ -14,6 +15,7 @@ void Engine::Stop() {
     worker.request_stop();
     if(worker.joinable()) worker.join();
     Cache::StopBackgroundWork();
+    RadarConvars::Stop();
 }
 
 ProcessModule Engine::GetClient() {
@@ -49,6 +51,7 @@ bool Engine::InitImpl() {
 
 	MapRaytrace::Init();
 	MapExtractor::Init();
+	RadarConvars::Start(process);
 
 
 
